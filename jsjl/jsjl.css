@@ -1,0 +1,40 @@
+body {
+  width: 96vw;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+section {
+  width: 100vw;
+  height: 90vh;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto;
+  grid-column-gap: 1em;
+  justify-content: center;
+  align-items: center;
+  justify-content: space-evenly;
+}
+nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.4ch;
+  padding: 0.5em;
+  padding-bottom: 1em;
+  background: radial-gradient(circle at 97% 66%, #e30 0%, #c30 5px, transparent 5.3px),
+    radial-gradient(circle at 98% 66%, #85d 0%, #86d 5px, transparent 5.3px),
+    radial-gradient(circle at 97.5% 36%, #3b5 0%, #285 5px, transparent 5.3px),
+    linear-gradient(to right, #ee0, #ee0 35%, #888 50%, #eee 65%, #eee 100%);
+}
+nav::before {
+  content: 'JS';
+  color: #000;
+  position: absolute;
+  left: 33%;
+  top: 50%;
+  font-family: 'Neutraface', sans-serif;
+  font-weight: bold;
+}
