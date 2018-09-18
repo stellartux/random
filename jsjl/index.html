@@ -7,6 +7,7 @@
 <link rel="shortcut icon" href="../favicon.ico">
 <link rel="stylesheet" href="../css/master.css">
 <link rel="stylesheet" href="jsjl.css">
+<script src="convert.js" charset="utf-8"></script>
 </head>
 
 <body>
@@ -16,10 +17,14 @@
 
 <section>
 <textarea name="name" rows="30" cols="60" id="text-in" placeholder="Paste JavaScript here"></textarea>
-<textarea name="name" rows="30" cols="60" id="text-out" placeholder="Julia comes out of this one"></textarea>
+<textarea name="name" rows="30" cols="60" id="text-out" placeholder="Julia comes out of here"></textarea>
 </section>
 
-<script src="convert.js" charset="utf-8"></script>
+<script type="text/javascript">
+document.getElementById('text-in').oninput = ev => {
+  document.getElementById('text-out').value = convert(document.getElementById('text-in').value)
+}
+</script>
 
 </body>
 
