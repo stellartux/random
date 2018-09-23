@@ -9,12 +9,12 @@ section {
   height: 90vh;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: auto;
+  grid-template: auto / 1fr 1fr;
   grid-column-gap: 1em;
   justify-content: center;
   align-items: center;
   justify-content: space-evenly;
+  margin-top: 2.5em;
 }
 nav {
   position: absolute;
@@ -38,4 +38,8 @@ nav::before {
   left: 33%;
   top: 50%;
   font-weight: bold;
+}
+details {
+  grid-column-start: 1;
+  grid-column-end: -1;
 }
