@@ -10,7 +10,7 @@ function convert (text) {
     // for loops
     [/(?:Test\.)?describe\(["'`](.+?)["'`],.*{/g, 'facts("$1") do'],
     // Test.describe("description") to facts("description") do
-    [/(?:Test\.)?it\(["'`](.+?)["'`](.+?),.*{/g, '  context("$1") do'],
+    [/(?:Test\.)?it\(["'`](.+?)["'`]\s?,\s?.*{/g, '  context("$1") do'],
     // Test.it("description") to context("description") do
     [/Test\.expect\((.+?)\s?,\s?["'`](.+)["'`]\);?}?/g,
       (match, p1, p2) => {
