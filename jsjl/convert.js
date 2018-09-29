@@ -8,23 +8,23 @@ function convert (text) {
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s?{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // for loops
-    [/(?:Test\.)?describe\(["'`](.+?)["'`],.*{/g, 'facts("$1") do'],
+    [/\h*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gm, 'facts("$1") do'],
     // Test.describe("description") to facts("description") do
-    [/(?:Test\.)?it\(["'`](.+?)["'`]\s?,\s?.*{/g, '  context("$1") do'],
+    [/\h*(?:Test\.)?it\(["'`](.+?)["'`]\s?,\s?.*{/gm, 'context("$1") do'],
     // Test.it("description") to context("description") do
-    [/Test\.expect\((.+?)\s?,\s?["'`](.+)["'`]\);?}?/g,
+    [/\h*Test\.expect\((.+?)\s?,\s?["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
-      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase()) + ' --> true "' + p2 + '"'
+      return '@fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.expect(x, y) to @fact x --> y
-    [/Test\.assertEquals\((.+?\(.+?\))\s*,\s*(.+?),\s?["'](.+?)["']\)+;?/g,
+    [/\h*Test\.assert(?:Deep)?Equals\((.+?\(.+?\))\s*,\s*(.+?),\s?["'](.+?)["']\)+;?/g,
       (match, p1, p2, p3) => {
-      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase() + '(') + ' --> ' + p2 + ' "' + p3 + '"'
+      return '@fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2 + ' "' + p3 + '"'
     }],
     // Test.assertEquals(x, y, z) to @fact x --> y "z"
-    [/Test\.assertEquals\((.+?\(.+?\))\s*,\s*(.+?)\)+;?/g,
+    [/\h*Test\.assert(?:Deep)?Equals\((.+?\(.+?\))\s*,\s*(.+?)\)+;?/g,
       (match, p1, p2) => {
-      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase() + '(') + ' --> ' + p2
+      return '@fact ' + p1.replace(/(.+)\(/g, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertEquals(x, y) to @fact x --> y
     [/===/, '=='],
@@ -52,5 +52,5 @@ function convert (text) {
   ]
   for (const r of regex)
     text = text.replace(r[0], r[1])
-  return 'using FactCheck\nusing Solution\n\n' + text
+  return 'using FactCheck\n\n' + text
 }
