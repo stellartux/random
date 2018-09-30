@@ -4,34 +4,36 @@ function convert (text) {
     // escape any " in string literals
     [/([a-zA-Z]*)\.length/, 'length($1)'],
     // length from property to function
-    [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\)\s?([^{]+$)/gm, 'for $1 in $2:$3\n$4end\n'],
-    [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s?{?/gm, 'for $1 in $2:$3'],
+    [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\)\s*([^{]+$)/gm, 'for $1 in $2:$3\n$4end\n'],
+    [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s*{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // for loops
-    [/\h*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gm, 'facts("$1") do'],
+    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gm, 'facts("$1") do'],
     // Test.describe("description") to facts("description") do
-    [/\h*(?:Test\.)?it\(["'`](.+?)["'`]\s?,\s?.*{/gm, 'context("$1") do'],
+    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gm, '  context("$1") do'],
     // Test.it("description") to context("description") do
-    [/\h*Test\.expect\((.+?)\s?,\s?["'`](.+)["'`]\);?}?/gm,
+    [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
-      return '@fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
+      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.expect(x, y) to @fact x --> y
-    [/\h*Test\.assert(?:Deep)?Equals\((.+?\(.+?\))\s*,\s*(.+?),\s?["'](.+?)["']\)+;?/g,
+    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gm,
       (match, p1, p2, p3) => {
-      return '@fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2 + ' "' + p3 + '"'
+      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
-    // Test.assertEquals(x, y, z) to @fact x --> y "z"
-    [/\h*Test\.assert(?:Deep)?Equals\((.+?\(.+?\))\s*,\s*(.+?)\)+;?/g,
+    // Test.assertEquals(x, y, z) to @fact x --> y
+    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?)\);?/gm,
       (match, p1, p2) => {
-      return '@fact ' + p1.replace(/(.+)\(/g, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
+      return '    @fact ' + p1.replace(/(.+)\(/g, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertEquals(x, y) to @fact x --> y
-    [/===/, '=='],
+    [/^\s*Test\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gm, '    @fact $1 --> roughly($2)'],
+    // Test.assertSimilar(x, y) to @fact x --> roughly(y)
+    [/===/g, '=='],
     // threequals to twoquals
     [/}\);?/g, 'end\n'],
     // }); to end
-    [/'(.+?[^\\]?)'/g, '"$1"'],
+    [/'(.+?[^\\]?)?'/g, '"$1"'],
     // '' string literals to "" string literals
     [/^(\s*)};?$/gm, '$1end'],
     // } to end
@@ -39,7 +41,7 @@ function convert (text) {
     // { to do
     [/function (.+?)\s?{\s?(?:return )([^}]+?)\s?;?\s?}/g, (m, p1, p2) => p1.replace(/\s+\(/, '(') + ' = ' + p2],
     // one liner function declarations to short form
-    [/(var|let)\s?/g, ''],
+    [/(var|let)\s/g, ''],
     // no more vars or lets
     [/Math.random/g, 'rand'],
     [/Math.floor/g, 'floor'],
@@ -48,7 +50,8 @@ function convert (text) {
     [/;?\s*$/gm, ''],  // strip line end semicolons and spaces
     [/\${(.+?)}/g, '\$($1)'], // template literals interpolation fix
     [/\n\n/g, '\n'], // no double new lines
-    [/else if/g, 'elseif']
+    [/else if/g, 'elseif'],
+    [/null/g, 'nothing']
   ]
   for (const r of regex)
     text = text.replace(r[0], r[1])
