@@ -11,26 +11,26 @@ function convert (text) {
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s*{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // Test.describe("description") to facts("description") do
-    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gm, 'facts("$1") do'],
+    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/getElementById, 'facts("$1") do'],
     // Test.it("description") to context("description") do
-    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gm, '  context("$1") do'],
+    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gmi, '  context("$1") do'],
     // Test.expect(x, y) to @fact x --> y
     [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.assertEquals(x, y, z) to @fact x --> y
-    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gm,
+    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gmi,
       (match, p1, p2, p3) => {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertEquals(x, y) to @fact x --> y
-    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?)\);?/gm,
+    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?)\);?/gmi,
       (match, p1, p2) => {
       return '    @fact ' + p1.replace(/(.+)\(/g, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertSimilar(x, y) to @fact x --> roughly(y)
-    [/^\s*Test\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gm, '    @fact $1 --> roughly($2)'],
+    [/^\s*Test\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gmi, '    @fact $1 --> roughly($2)'],
     // threequals to twoquals
     [/===/g, '=='],
     // }); to end
