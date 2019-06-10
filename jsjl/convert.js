@@ -11,7 +11,7 @@ function convert (text) {
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s*{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // Test.describe("description") to facts("description") do
-    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/getElementById, 'facts("$1") do'],
+    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gmi, 'facts("$1") do'],
     // Test.it("description") to context("description") do
     [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gmi, '  context("$1") do'],
     // Test.expect(x, y) to @fact x --> y
