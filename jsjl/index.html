@@ -23,6 +23,24 @@
 This is a script for converting <a href="http://www.codewars.com/">Codewars</a> tests to <a href="https://github.com/JuliaAttic/FactCheck.jl">Julia FactCheck</a> tests.
 It doesn't really parse the JavaScript, it's just a gauntlet of regex.
 </details>
+<details>
+<summary>Handy Snippets</summary>
+<details>
+<summary>Julia v0.6 <code>randstring()</code> polyfill</summary>
+<textarea cols="40" rows="12">if VERSION &lt; v"1"
+  function randstring(range, len::Int)
+    choices = [range...]
+    str = ""
+    while (length(str) &lt; len)
+      str *= string(rand(choices))
+    end
+    str
+  end
+else
+  using Random
+end</textarea>
+</details>
+</details>
 </section>
 
 <script type="text/javascript">

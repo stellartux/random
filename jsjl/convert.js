@@ -17,12 +17,12 @@ function convert (text) {
     // Test.expect(x, y) to @fact x --> y
     [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
-      return '    @fact Solution.' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
+      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.assertEquals(x, y, z) to @fact x --> y
     [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gm,
       (match, p1, p2, p3) => {
-      return '    @fact Solution.' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
+      return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertEquals(x, y) to @fact x --> y
     [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?)\);?/gm,
