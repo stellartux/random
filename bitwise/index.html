@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<title>Bitwise</title>
+<link rel="stylesheet" href="index.css">
+<script src="bitwise.js" charset="utf-8"></script>
+</head>
+
+<body>
+<div id="main">
+<h1>Boolean Algebra and You!</h1>
+<div id="user-input">
+A:<input type="number" name="a" value="0" min="0" max="255" step="1">
+B:<input type="number" name="b" value="0" min="0" max="255" step="1">
+<select name="ops">
+  <optgroup label="Bitwise">
+    <option value="bit-and">A & B</option>
+    <option value="bit-or">A | B</option>
+    <option value="bit-xor">A ^ B</option>
+  </optgroup>
+  <optgroup label="Logical">
+    <option value="and">A && B</option>
+    <option value="or">A || B</option>
+    <option value="not">!A</option>
+  </optgroup>
+  </select>
+<input type="number" name="c" value="0" min="0" max="255" step="1" disabled>
+
+</div>
+</div>
+</body>
+
+</html>
