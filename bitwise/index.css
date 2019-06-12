@@ -7,6 +7,7 @@ body, #main, #user-input {
   font-family: 'Fira Code', 'Fira Mono', monospace;
 }
 body, #main {
+  position: relative;
   flex-direction: column;
   align-items: center;
   counter-reset: displays;
@@ -59,5 +60,11 @@ input[type=number] {
   color: #111;
   border: inset 2pt #ddd;
   margin-right: 2ch;
+}
 
+.column-head {
+  display: flex;
+  flex-direction: row;
+  width: 71vw;
+  justify-content: space-around;
 }

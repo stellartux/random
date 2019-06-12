@@ -62,6 +62,7 @@ window.onload = () => {
   for (let input of inputs) {
     input.addEventListener('input', updateDisplays)
   }
+  updateDisplays()
 }
 
 function updateDisplays () {
