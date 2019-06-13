@@ -68,3 +68,7 @@ input[type=number] {
   width: 71vw;
   justify-content: space-around;
 }
+
+input[type=text] {
+  width: 3ch;
+}

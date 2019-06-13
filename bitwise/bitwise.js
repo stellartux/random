@@ -50,7 +50,11 @@ const displays = [],
     'bit-xor': (a, b) => a ^ b,
     'and': (a, b) => a | 0 && b | 0,
     'or': (a, b) => a | 0 || b | 0,
-    'not': a => Number(a == 0)
+    'not': a => Number(a == 0),
+    'add': (a, b) => ((a | 0) + (b | 0)) % 256,
+    'sub': (a, b) => a - b % 256,
+    'mul': (a, b) => a * b % 256,
+    'div': (a, b) => a / b % 256 | 0
   }
 
 window.onload = () => {
@@ -66,8 +70,11 @@ window.onload = () => {
 }
 
 function updateDisplays () {
-  document.querySelector('[name="c"]').value =
-    displays[2].value = funs[inputs[2].value](
-    displays[0].value = inputs[0].value,
-    displays[1].value = inputs[1].value)
+  document.querySelector('input[type=text]').value = String.fromCharCode(
+    document.querySelector('[name="c"]').value =
+      displays[2].value = funs[inputs[2].value](
+        displays[0].value = inputs[0].value,
+        displays[1].value = inputs[1].value
+      )
+  )
 }
