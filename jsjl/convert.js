@@ -20,17 +20,21 @@ function convert (text) {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.assertEquals(x, y, z) to @fact x --> y
-    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gmi,
+    [/^\s*(?:Test\.)?assert(?:(?:[dD]eep)?Equals?)?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gmi,
       (match, p1, p2, p3) => {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertEquals(x, y) to @fact x --> y
-    [/^\s*Test\.assert(?:Deep)?Equals\((.+?\(.*?\))\s*,\s*(.+?)\);?/gmi,
+    [/^\s*(?:Test\.)?assert\.?(?:[dD]eep)?Equals?\((.+?\(.*?\))\s*,\s*(.+?)\);?/gmi,
       (match, p1, p2) => {
       return '    @fact ' + p1.replace(/(.+)\(/g, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
     // Test.assertSimilar(x, y) to @fact x --> roughly(y)
     [/^\s*Test\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gmi, '    @fact $1 --> roughly($2)'],
+    // assert.throw(x, y) to @fact_throws y x
+    [/^\s*(?:Test\.)?assert\.?[tT]hrows?\s*\( *(.+), *(.+) *\)/gm, '    @fact_throws $2 $1'],
+    // assert.throw(x) to @fact_throws x
+    [/^\s*(?:Test\.)?assert\.?[tT]hrows?\s*\( *(.+) *\)/gm, '    @fact_throws $1'],
     // threequals to twoquals
     [/===/g, '=='],
     // }); to end
