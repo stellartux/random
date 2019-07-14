@@ -47,8 +47,12 @@ function convert (text) {
     [/^(\s*)};?$/gm, '$1end'],
     // { to do
     [/{\s*$/gm, ' do'],
-    // no more vars or lets
-    [/\s(var|let\s)/g, ''],
+    // no more vars consts or lets
+    [/\s(var|let|const\s)/g, ''],
+    // comments
+    [/\/\//g, '#'],
+    [/\/\*+/g, '#='],
+    [/\*+\//g, '=#'],
     // fix Math functions
     [/Math.random/g, 'rand'],
     [/Math.floor/g, 'floor'],
