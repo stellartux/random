@@ -33,6 +33,13 @@ else
   using Random
 end</textarea>
 </details>
+<details>
+<summary>Julia v0.6 <code>replace(a, p::Pair)</code> polyfill</summary>
+<textarea cols="80" rows="5">if VERSION &lt; v"1"
+  import Base.replace
+  replace(a, p::Pair) = replace(a, p[1], p[2])
+end</textarea>
+</details>
 </details>
 </section>
 
