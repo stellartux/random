@@ -40,6 +40,12 @@ end</textarea>
   replace(a, p::Pair) = replace(a, p[1], p[2])
 end</textarea>
 </details>
+<details>
+<summary>Julia v0.6 <code>occursin()</code> polyfill</summary>
+<textarea cols="80" rows="5">if VERSION &lt; v"1"
+  occursin = ismatch
+end</textarea>
+</details>
 </details>
 </section>
 
