@@ -40,7 +40,7 @@ function convert (text) {
     // }); to end
     [/([ |\t]*)}\);?/g, '$1end\n'],
     // '' string literals to "" string literals
-    [/'(.+?[^\\]?)?'/g, '"$1"'],
+    [/'(.+?[^\\]?)??'/g, '"$1"'],
     // one liner function declarations to short form
     [/function (.+?)\s?{\s?(?:return )([^}]+?)\s?;?\s?}/g, (m, p1, p2) => p1.replace(/\s+\(/, '(') + ' = ' + p2],
     // } to end
