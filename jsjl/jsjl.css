@@ -2,7 +2,6 @@ body {
   width: 96vw;
   display: flex;
   justify-content: center;
-  overflow: hidden;
 }
 section {
   width: 100vw;
