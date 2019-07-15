@@ -28,7 +28,7 @@ It doesn't really parse the JavaScript, it's just a gauntlet of regex.
 <details>
 <summary>Julia v0.6 <code>randstring()</code> polyfill</summary>
 <textarea cols="80" rows="5">if VERSION &lt; v"1"
-  randstring(range, len) = join(rand(range, len))
+  randstring(range, len) = join(rand([range...], len))
 else
   using Random
 end</textarea>
