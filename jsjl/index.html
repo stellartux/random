@@ -18,34 +18,23 @@
 <section>
 <textarea name="name" rows="30" cols="60" id="text-in" placeholder="Paste JavaScript here"></textarea>
 <textarea name="name" rows="30" cols="60" id="text-out" placeholder="Julia comes out of here"></textarea>
+<textarea id="polyfilloutput" rows="8" cols="60"></textarea>
+<div id="checkboxes">
+  <label><code>randstring()</code>
+  <input type="checkbox" name="randstring" onchange="polyfills()"></label>
+  <label><code>replace()</code>
+  <input type="checkbox" name="replace" onchange="polyfills()"></label>
+  <label><code>occursin()</code>
+  <input type="checkbox" name="occursin" onchange="polyfills()"></label>
+  <label><code>@isdefined</code>
+  <input type="checkbox" name="isdefined" onchange="polyfills()"></label>
+  <label><code>*(::Char, ::String)</code>
+  <input type="checkbox" name="joincharstring" onchange="polyfills()"></label>
+</div>
 <details>
 <summary>What am I even looking at?</summary>
 This is a script for converting <a href="http://www.codewars.com/">Codewars</a> tests to <a href="https://github.com/JuliaAttic/FactCheck.jl">Julia FactCheck</a> tests.
 It doesn't really parse the JavaScript, it's just a gauntlet of regex.
-</details>
-<details>
-<summary>Handy Snippets</summary>
-<details>
-<summary>Julia v0.6 <code>randstring()</code> polyfill</summary>
-<textarea cols="80" rows="5">if VERSION &lt; v"1"
-  randstring(range, len) = join(rand([range...], len))
-else
-  using Random
-end</textarea>
-</details>
-<details>
-<summary>Julia v0.6 <code>replace(a, p::Pair)</code> polyfill</summary>
-<textarea cols="80" rows="5">if VERSION &lt; v"1"
-  import Base.replace
-  replace(a, p::Pair) = replace(a, p[1], p[2])
-end</textarea>
-</details>
-<details>
-<summary>Julia v0.6 <code>occursin()</code> polyfill</summary>
-<textarea cols="80" rows="5">if VERSION &lt; v"1"
-  occursin = ismatch
-end</textarea>
-</details>
 </details>
 </section>
 

@@ -75,3 +75,51 @@ function convert (text) {
     text = text.replace(r[0], r[1])
   return 'using FactCheck\n\n' + text
 }
+
+const polys = {
+  'randstring': {
+    backfill: 'randstring(range, len) = join(rand([range...], len))',
+    frontfill: 'using Random'
+  },
+  'replace': {
+    backfill: 'import Base.replace\n  replace(a, p::Pair) = replace(a, p[1], p[2])'
+  },
+  'occursin': {
+    backfill: 'occursin = ismatch'
+  },
+  'isdefined': {
+    backfill: 'macro isdefined(s) isdefined(Symbol(s)) end'
+  },
+  'joincharstring': {
+    backfill: 'import Base.*\n  *(s::String, c::Char) = string(c) * s\n  *(c::Char, s::String) = s * string(c)'
+  }
+}
+
+function polyfills () {
+  let backs = new Set(), fronts = new Set()
+  for (let box of document.querySelectorAll('#checkboxes [type="checkbox"]')) {
+    if (box.checked) {
+      const pf = polys[box.name]
+      if ('backfill' in pf) {
+        backs.add(pf.backfill)
+      }
+      if ('frontfill' in pf) {
+        fronts.add(pf.frontfill)
+      }
+    }
+  }
+  let output = ''
+  if (backs.size > 0) {
+    output += ['if VERSION < v"1"', ...backs.values()].join('\n  ')
+  }
+  if (fronts.size > 0) {
+    if (output === '') {
+      output += 'if VERSION >= v"1"'
+    } else {
+      output += '\nelse'
+    }
+    output += '\n  ' + [...fronts.values()].join('\n  ')
+  }
+  if (output !== '') output += '\nend'
+  document.getElementById('polyfilloutput').value = output
+}
