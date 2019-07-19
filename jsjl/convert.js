@@ -83,7 +83,7 @@ const polys = {
     frontfill: 'using Random'
   },
   'replace': {
-    backfill: 'import Base.replace\n  replace(a, p::Pair) = replace(a, p[1], p[2])'
+    backfill: 'import Base.replace\n  replace(a, p::Pair; count=typemax(Int)) = replace(a, p[1], p[2], count)'
   },
   'occursin': {
     backfill: 'occursin = ismatch'
