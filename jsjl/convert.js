@@ -11,11 +11,11 @@ function convert (text) {
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s*{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // Test.describe("description") to facts("description") do
-    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gmi, 'facts("$1") do'],
+    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*{/gmis, 'facts("$1") do'],
     // Test.it("description") to context("description") do
-    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gmi, '  context("$1") do'],
+    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?{/gmis, '  context("$1") do'],
     // Test.expect(x, y) to @fact x --> y
-    [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
+    [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gms,
       (match, p1, p2) => {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
