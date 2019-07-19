@@ -57,6 +57,7 @@ function convert (text) {
     [/Math.random/g, 'rand'],
     [/Math.floor/g, 'floor'],
     [/Math.pow\(/g, '^('],
+    [/Math.PI/g, 'π'],
     [/\*\*/g, '^'],
     // skinny arrow functions
     [/\s?=>\s?/g, ' -> '],
