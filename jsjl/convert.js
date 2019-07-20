@@ -127,9 +127,9 @@ function polyfills () {
     }
     output += '\n  ' + [...fronts.values()].join('\n  ')
   }
-  if (output !== '') output += '\nend\n'
+  if (output !== '') output += '\nend'
   if (ends.size > 0) {
-    output += [...ends.values()].join('\n')
+    output += ['\n', ...ends.values()].join('\n')
   }
   document.getElementById('polyfilloutput').value = output
 }
