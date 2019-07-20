@@ -93,11 +93,14 @@ const polys = {
   },
   'joincharstring': {
     backfill: 'import Base.*\n  *(s::String, c::Char) = string(c) * s\n  *(c::Char, s::String) = s * string(c)'
+  },
+  'shufflestring': {
+    endfill: 'shuffle(s::String) = join(shuffle!(split(s, "")), "")'
   }
 }
 
 function polyfills () {
-  let backs = new Set(), fronts = new Set()
+  let backs = new Set(), fronts = new Set(), ends = new Set()
   for (let box of document.querySelectorAll('#checkboxes [type="checkbox"]')) {
     if (box.checked) {
       const pf = polys[box.name]
@@ -106,6 +109,9 @@ function polyfills () {
       }
       if ('frontfill' in pf) {
         fronts.add(pf.frontfill)
+      }
+      if ('endfill' in pf) {
+        ends.add(pf.endfill)
       }
     }
   }
@@ -121,6 +127,9 @@ function polyfills () {
     }
     output += '\n  ' + [...fronts.values()].join('\n  ')
   }
-  if (output !== '') output += '\nend'
+  if (output !== '') output += '\nend\n'
+  if (ends.size > 0) {
+    output += [...ends.values()].join('\n')
+  }
   document.getElementById('polyfilloutput').value = output
 }
