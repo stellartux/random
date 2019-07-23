@@ -20,18 +20,6 @@
 <textarea name="name" rows="30" cols="60" id="text-out" placeholder="Julia comes out of here"></textarea>
 <textarea id="polyfilloutput" rows="8" cols="60"></textarea>
 <div id="checkboxes">
-  <label><code>randstring()</code>
-  <input type="checkbox" name="randstring" onchange="polyfills()"></label>
-  <label><code>replace()</code>
-  <input type="checkbox" name="replace" onchange="polyfills()"></label>
-  <label><code>occursin()</code>
-  <input type="checkbox" name="occursin" onchange="polyfills()"></label>
-  <label><code>@isdefined</code>
-  <input type="checkbox" name="isdefined" onchange="polyfills()"></label>
-  <label><code>*(::Char, ::String)</code>
-  <input type="checkbox" name="joincharstring" onchange="polyfills()"></label>
-  <label><code>shuffle(::String)</code>
-  <input type="checkbox" name="shufflestring" onchange="polyfills()"></label>
 </div>
 <details>
 <summary>What am I even looking at?</summary>
@@ -39,13 +27,6 @@ This is a script for converting <a href="http://www.codewars.com/">Codewars</a> 
 It doesn't really parse the JavaScript, it's just a gauntlet of regex.
 </details>
 </section>
-
-<script type="text/javascript">
-document.getElementById('text-in').oninput = ev => {
-  document.getElementById('text-out').value = convert(document.getElementById('text-in').value)
-}
-</script>
-
 </body>
 
 </html>

@@ -20,7 +20,7 @@ function convert (text) {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '')) + ' --> true "' + p2 + '"'
     }],
     // Test.assertEquals(x, y, z) to @fact x --> y
-    [/^\s*(?:Test\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?)?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gmi,
+    [/^\s*(?:Test\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gmi,
       (match, p1, p2, p3) => {
       return '    @fact ' + p1.replace(/(.+)\(/, (m, q1) => q1.toLowerCase().replace('_', '') + '(') + ' --> ' + p2
     }],
@@ -89,13 +89,35 @@ const polys = {
     backfill: 'occursin = ismatch'
   },
   'isdefined': {
+    description: '@isdefined',
     backfill: 'macro isdefined(s) isdefined(Symbol(s)) end'
   },
   'joincharstring': {
+    description: '*(::Char, ::String)',
     backfill: 'import Base.*\n  *(s::String, c::Char) = string(c) * s\n  *(c::Char, s::String) = s * string(c)'
   },
   'shufflestring': {
+    description: 'shuffle(::String)',
     endfill: 'shuffle(s::String) = join(shuffle!(split(s, "")), "")'
+  }
+}
+
+window.onload = () => {
+  document.getElementById('text-in').oninput = ev => {
+    document.getElementById('text-out').value = convert(document.getElementById('text-in').value)
+  }
+  const container = document.getElementById('checkboxes')
+  for (let p of Object.keys(polys)) {
+    const label = document.createElement('label')
+    const labelText = document.createElement('code')
+    labelText.innerText = 'description' in polys[p] ? polys[p].description : p + '()'
+    const input = document.createElement('input')
+    input.setAttribute('name', p)
+    input.setAttribute('type', 'checkbox')
+    input.addEventListener('change', polyfills)
+    label.appendChild(labelText)
+    label.appendChild(input)
+    container.appendChild(label)
   }
 }
 
