@@ -11,9 +11,9 @@ function convert (text) {
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+\+\s?\)\s*{?/gm, 'for $1 in $2:$3'],
     [/for\s*\(\s*(?:var|let)\s*(.+?)=(.+?);(?:.+?)<(.+?);.+?\+=\s*(\d+)\s*\)\s*{?/gm, 'for $1 in $2:$4:$3'],
     // Test.describe("description") to facts("description") do
-    [/^\s*(?:Test\.)?describe\(["'`](.+?)["'`],.*\n?\s*{/gmi, 'facts("$1") do'],
+    [/^\s*(?:Test\.)?describe\s*\(\s*["'`](.+?)["'`],.*\n?\s*{/gmi, 'facts("$1") do'],
     // Test.it("description") to context("description") do
-    [/^\s*(?:Test\.)?it\s*\(["'`](.+?)["'`].*?\n?\s*{/gmi, '  context("$1") do'],
+    [/^\s*(?:Test\.)?it\s*\(\s*["'`](.+?)["'`].*?\n?\s*{/gmi, '  context("$1") do'],
     // Test.expect(x, y) to @fact x --> y
     [/^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
@@ -79,8 +79,11 @@ function convert (text) {
 
 const polys = {
   'randstring': {
-    backfill: 'randstring(range, len) = join(rand([range...], len))',
+    backfill: "randstring(range, len) = join(rand([range...], len))",
     frontfill: 'using Random'
+  },
+  '-- default randstring': {
+    backfill: "randstring(len::Int) = randstring(vcat(collect('a':'z'), collect('A':'Z'), collect('0':'9')), len)",
   },
   'replace': {
     backfill: 'import Base.replace\n  replace(a, p::Pair; count=typemax(Int)) = replace(a, p[1], p[2], count)'
