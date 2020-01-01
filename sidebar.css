@@ -1,0 +1,19 @@
+* { margin:0; padding:0; }
+
+label input+header {
+  background-color: pink;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 20%;
+  transition: height 1.2s;
+}
+label input:checked+header {
+  background-color: pink;
+  position: absolute;
+  overflow: hidden;
+  text-overflow: clip;
+  left: 0;
+  height: 0;
+}
