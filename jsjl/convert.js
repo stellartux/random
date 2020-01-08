@@ -85,11 +85,14 @@ const polys = {
   '-- default randstring': {
     backfill: "randstring(len::Int) = randstring(vcat(collect('a':'z'), collect('A':'Z'), collect('0':'9')), len)",
   },
+  'rand(s::String)': {
+    backfill: "import Base.rand\n  rand(s::String) = rand([s...])"
+  },
   'replace': {
     backfill: 'import Base.replace\n  replace(a, p::Pair; count=typemax(Int)) = replace(a, p[1], p[2], count)'
   },
   'occursin': {
-    backfill: 'occursin = ismatch'
+    backfill: 'occursin = ismatch\n occursin(c::Char, s::String) = contains(s, string(c))\n  occursin(c::String, s::String) = contains(s, c)'
   },
   'isdefined': {
     description: '@isdefined',
@@ -97,7 +100,7 @@ const polys = {
   },
   'joincharstring': {
     description: '*(::Char, ::String)',
-    backfill: 'import Base.*\n  *(s::String, c::Char) = string(c) * s\n  *(c::Char, s::String) = s * string(c)'
+    backfill: 'import Base.*\n  *(s::String, c::Char) = s * string(c)\n  *(c::Char, s::String) = string(c) * s'
   },
   'shufflestring': {
     description: 'shuffle(::String)',
