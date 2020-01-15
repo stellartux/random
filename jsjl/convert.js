@@ -92,7 +92,7 @@ const polys = {
     backfill: 'import Base.replace\n  replace(a, p::Pair; count=typemax(Int)) = replace(a, p[1], p[2], count)'
   },
   'occursin': {
-    backfill: 'occursin(re::Regex, s::String) = ismatch\n occursin(c, s::String) = contains(s, string(c))
+    backfill: 'occursin(re::Regex, s::String) = ismatch\n occursin(c, s::String) = contains(s, string(c))'
   },
   'isdefined': {
     description: '@isdefined',
