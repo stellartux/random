@@ -130,7 +130,6 @@ function updateColor(value) {
 }
 // just toggling attributes, all the colours and shiny are SVG filters in the HTML
 function rainbow() {
-  $('[type="color"]').classList.toggle('hidden')
   if ($('[name="rainbow"]').checked) {
     updateColor('white')
     $('path').setAttribute('stroke', 'url("#rainbowify")')

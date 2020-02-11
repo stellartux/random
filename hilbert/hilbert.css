@@ -21,7 +21,7 @@ svg {
 #inputs {
   max-height: 10vmin;
 }
-.hidden {
+#rainbow-checkbox:checked ~ [type="color"] {
   visibility: hidden;
 }
 .octicon {
