@@ -1,0 +1,32 @@
+input,button {
+  border-radius: 1vmin;
+  padding: 3px;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  background-color: #222222;
+  color: #dddddd;
+  margin: auto;
+  align-items: center;
+}
+button,body {
+  font-family: "Open Sans", sans-serif;
+}
+svg {
+  height: 88vmin;
+  width: 88vmin;
+  margin: 2vmin;
+}
+#inputs {
+  max-height: 10vmin;
+}
+.hidden {
+  visibility: hidden;
+}
+.octicon {
+  width: 24px;
+  height: 24px;
+  margin: auto;
+  padding: 0;
+}

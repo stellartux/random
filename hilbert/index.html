@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<title>Hilbert Curve</title>
+<script src="./hilbert.js" charset="utf-8" defer></script>
+<link rel="stylesheet" href="./hilbert.css">
+</head>
+
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="400" height="400">
+  <defs>
+    <filter id="shiny">
+      <feSpecularLighting result="specOut"
+          specularExponent="20" lighting-color="#aa9f9f">
+        <fePointLight x="50" y="75" z="600"/>
+      </feSpecularLighting>
+      <feComposite in="SourceGraphic" in2="specOut" result="addout"
+        operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>
+      <feComposite operator="in" in="url('#curve')" in2="SourceGraphic" result="specOut"/>
+    </filter>
+    <linearGradient id="rainbowify" spreadMethod="repeat">
+      <stop offset="0%"  stop-color="#ef1200" />
+      <stop offset="15%" stop-color="orange" />
+      <stop offset="30%" stop-color="yellow" />
+      <stop offset="45%" stop-color="limegreen" />
+      <stop offset="60%" stop-color="cyan" />
+      <stop offset="75%" stop-color="#1122dd" />
+      <stop offset="90%" stop-color="magenta" />
+      <stop offset="100%" stop-color="red" />
+      <animateTransform attributeName="gradientTransform"
+                  attributeType="XML"
+                  type="rotate"
+                  from="0"
+                  to="360"
+                  dur="6s"
+                  repeatCount="indefinite"/>
+    </linearGradient>
+  </defs>
+  <path id="curve" d="M 10 10" stroke="white" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+<section id="inputs">
+  <label>Order: <input type="number" name="order" value="4" min="1" max="7"></label>
+  <button type="button" name="render" onclick="render()">Render</button>
+  <button type="button" name="animate" onclick="animator()">Animate</button>
+  <button type="button" name="stop" onclick="cancelFrame()">Stop</button>
+  <label>Speed: <input type="range" name="speed" value="8" min="1" max="25" step="any"></label>
+  <label>🌈<input type="checkbox" name="rainbow" onclick="rainbow()"></label>
+  <input type="color" value="#ffffff" onchange="updateColor(this.value)">
+  <a href="https://github.com/stellartux/random/tree/master/hilbert">
+  <svg class="octicon" height="24" version="1.1" viewBox="0 0 16 16" width="24"><path fill="white" fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
+  </a>
+</section>
+</body>
+
+</html>
