@@ -46,3 +46,6 @@ details details {
   display: flex;
   flex-direction: column;
 }
+button:active {
+  outline: thin solid yellow;
+}

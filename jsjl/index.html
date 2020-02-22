@@ -19,12 +19,17 @@
 <textarea name="name" rows="30" cols="60" id="text-in" placeholder="Paste JavaScript here"></textarea>
 <textarea name="name" rows="30" cols="60" id="text-out" placeholder="Julia comes out of here"></textarea>
 <textarea id="polyfilloutput" rows="8" cols="60"></textarea>
-<div id="checkboxes">
+<div>
+  <button type="button" name="pastecopy" onmouseup="pasteCopy()">Convert Clipboard</button>
+  <button type="button" name="copy" onmouseup="copyText()">Copy Code</button>
+  <label>Using FactCheck: <input type="checkbox" name="factcheck" checked></label>
+  <div id="checkboxes">
+  </div>
 </div>
 <details>
 <summary>What am I even looking at?</summary>
 This is a script for converting <a href="http://www.codewars.com/">Codewars</a> tests to <a href="https://github.com/JuliaAttic/FactCheck.jl">Julia FactCheck</a> tests.
-It doesn't really parse the JavaScript, it's just a gauntlet of regex.
+It doesn't really parse the JavaScript, it's just a gauntlet of regex. The bottom section is a bunch of polyfills for making Julia v1 code run on Julia v0.6
 </details>
 </section>
 </body>

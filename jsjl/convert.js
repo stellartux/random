@@ -21,17 +21,17 @@ function convert(text) {
     ],
     // Test.describe("description") to facts("description") do
     [
-      /^\s*(?:Test\.)?describe\s*\(\s*["'`](.+?)["'`],.*\n?\s*{/gim,
+      /^\s*(?:[tT]est\.)?describe\s*\(\s*["'`](.+?)["'`],.*\n?\s*{/gim,
       'facts("$1") do',
     ],
     // Test.it("description") to context("description") do
     [
-      /^\s*(?:Test\.)?it\s*\(\s*["'`](.+?)["'`].*?\n?\s*{/gim,
+      /^\s*(?:[tT]est\.)?it\s*\(\s*["'`](.+?)["'`].*?\n?\s*{/gim,
       '  context("$1") do',
     ],
     // Test.expect(x, y) to @fact x --> y
     [
-      /^\s*Test\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
+      /^\s*[tT]est\.expect\((.+?)\s*,\s*["'`](.+)["'`]\);?}?/gm,
       (match, p1, p2) => {
         return (
           '    @fact ' +
@@ -44,7 +44,7 @@ function convert(text) {
     ],
     // Test.assertEquals(x, y, z) to @fact x --> y
     [
-      /^\s*(?:Test\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gim,
+      /^\s*(?:[tT]est\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gim,
       (match, p1, p2, p3) => {
         return (
           '    @fact ' +
@@ -59,7 +59,7 @@ function convert(text) {
     ],
     // Test.assertEquals(x, y) to @fact x --> y
     [
-      /^\s*(?:Test\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\((.+?\(.*?\))\s*,\s*(.+?)\);?/gim,
+      /^\s*(?:[tT]est\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\((.+?\(.*?\))\s*,\s*(.+?)\);?/gim,
       (match, p1, p2) => {
         return (
           '    @fact ' +
@@ -74,17 +74,17 @@ function convert(text) {
     ],
     // Test.assertSimilar(x, y) to @fact x --> roughly(y)
     [
-      /^\s*Test\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gim,
+      /^\s*[tT]est\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gim,
       '    @fact $1 --> roughly($2)',
     ],
     // assert.throw(x, y) to @fact_throws y x
     [
-      /^\s*(?:Test\.)?assert\.?[tT]hrows?\s*\( *(.+), *(.+) *\)/gm,
+      /^\s*(?:[tT]est\.)?assert\.?[tT]hrows?\s*\( *(.+), *(.+) *\)/gm,
       '    @fact_throws $2 $1',
     ],
     // assert.throw(x) to @fact_throws x
     [
-      /^\s*(?:Test\.)?assert\.?[tT]hrows?\s*\( *(.+) *\)/gm,
+      /^\s*(?:[tT]est\.)?assert\.?[tT]hrows?\s*\( *(.+) *\)/gm,
       '    @fact_throws $1',
     ],
     // threequals to twoquals
@@ -130,7 +130,7 @@ function convert(text) {
   for (const r of regex) {
     text = text.replace(r[0], r[1])
   }
-  return 'using FactCheck\n\n' + text
+  return (document.querySelector('input[name="factcheck"]').checked ? 'using FactCheck\n\n' : '') + text
 }
 
 const polys = {
@@ -142,16 +142,17 @@ const polys = {
     backfill:
       "randstring(len::Int) = randstring(vcat(collect('a':'z'), collect('A':'Z'), collect('0':'9')), len)",
   },
-  'rand(s::String)': {
+  rand: {
+    description: 'rand(s::String)',
     backfill: 'import Base.rand\n  rand(s::String) = rand([s...])',
   },
   replace: {
     backfill:
-      'import Base.replace\n  replace(a, p::Pair; count=typemax(Int)) = replace(a, p[1], p[2], count)',
+      'import Base.replace\n  function replace(a, ps::Vararg{Pair}; count=typemax(Int))\n    for p in ps\n      a = replace(a, p[1], p[2], count)\n    end\n  end',
   },
   occursin: {
     backfill:
-      'occursin(re::Regex, s::String) = ismatch\n occursin(c, s::String) = contains(s, string(c))',
+      'occursin(re::Regex, s::String) = ismatch\n  occursin(c, s::String) = contains(s, string(c))',
   },
   isdefined: {
     description: '@isdefined',
@@ -160,7 +161,7 @@ const polys = {
   joincharstring: {
     description: '*(::Char, ::String)',
     backfill:
-      'import Base.*\n  *(s::String, c::Char) = s * string(c)\n  *(c::Char, s::String) = string(c) * s',
+      'import Base.*\n  *(s::String, c::Char) = s * string(c)\n  *(c::Char, s::String) = string(c) * s\n  *(c::Char, s::Char) = string(c) * string(s)',
   },
   shufflestring: {
     description: 'shuffle(::String)',
@@ -192,6 +193,21 @@ window.onload = () => {
     label.appendChild(input)
     container.appendChild(label)
   }
+}
+
+function copyText() {
+  navigator.clipboard.writeText(document.getElementById('text-out').value)
+}
+
+function pasteCopy() {
+  navigator.clipboard
+    .readText()
+    .then(text => {
+      const code = convert(text)
+      document.getElementById('text-in').value = text
+      document.getElementById('text-out').value = code
+      navigator.clipboard.writeText(code)
+    })
 }
 
 function polyfills() {
