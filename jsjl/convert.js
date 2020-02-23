@@ -122,7 +122,7 @@ function convert(text) {
     [/\${(.+?)}/g, '$($1)'],
     // no double new lines
     [/\n\n/g, '\n'],
-    [/else if/g, 'elseif'],
+    [/}? *else if/g, ' elseif'],
     // remove brackets on if statements
     [/if\s*\((.+)\) *\n? *{? */gm, 'if $1 '],
     [/null/g, 'nothing'],
@@ -140,7 +140,7 @@ const polys = {
   },
   '-- default randstring': {
     backfill:
-      "randstring(len::Int) = randstring(vcat(collect('a':'z'), collect('A':'Z'), collect('0':'9')), len)",
+      "randstring(len::Int) = randstring(['a':'z'..., 'A':'Z'..., '0':'9'...]), len)",
   },
   rand: {
     description: 'rand(s::String)',
@@ -148,11 +148,11 @@ const polys = {
   },
   replace: {
     backfill:
-      'import Base.replace\n  function replace(a, ps::Vararg{Pair}; count=typemax(Int))\n    for p in ps\n      a = replace(a, p[1], p[2], count)\n    end\n  end',
+      'import Base.replace\n  function replace(a, ps::Vararg{Pair}; count=typemax(Int))\n    for p in ps\n      a = replace(a, p[1], p[2], count)\n    end\n  a\n  end',
   },
   occursin: {
     backfill:
-      'occursin(re::Regex, s::String) = ismatch\n  occursin(c, s::String) = contains(s, string(c))',
+      'occursin(re::Regex, s::String) = ismatch(re, s)\n  occursin(c, s::String) = contains(s, string(c))',
   },
   isdefined: {
     description: '@isdefined',
