@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+
+<head>
+<meta charset="utf-8">
+<title>Turtle</title>
+<style media="screen">
+  body {
+    background-color: #013;
+    margin: auto;
+    display: flex;
+    min-height: 99vh;
+    justify-content: space-evenly;
+  }
+  body * {
+    margin: 10px;
+    padding: 6px;
+    border-radius: 4px;
+    flex-grow: 1;
+  }
+  svg {
+    background-color: white;
+    align-self: center;
+  }
+  textarea {
+    align-self: stretch;
+    outline: thick solid green;
+    background-color: #013;
+    color: #cdf;
+  }
+  textarea:invalid {
+    outline: thick solid red;
+  }
+  @media (max-width: 700px) {
+    body { flex-direction: column-reverse; }
+  }
+  @media (prefers-color-scheme: light) {
+    body { background-color: #cdf }
+    textarea { background-color: #013; color: #cdf; }
+  }
+</style>
+<script type="module">
+import { turtlePath, isValid } from './turtle.js'
+
+const evalCode = (() => {
+  const path = document.querySelector('path')
+  const code = document.querySelector('#code')
+  return () => {
+    if (isValid(code.value)) {
+      code.setCustomValidity('')
+      path.setAttribute('d', turtlePath(code.value))
+    } else {
+      code.setCustomValidity('invalid')
+    }
+  }
+})()
+
+document.querySelector('textarea').oninput = evalCode
+evalCode()
+</script>
+</head>
+
+<body>
+  <textarea id="code" rows="10" cols="20" spellcheck="false">fd 100 rt 90 fd 100 rt 90 fd 100 rt 90 fd 100</textarea>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="-160 -120 320 240">
+    <path d="M 0 0" stroke="black" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+</body>
+
+</html>
