@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyrillator</title>
+  <link rel="preload" href="cyrillator.js" as="script">
+  <style>
+    body {
+      display: grid;
+      max-width: 80ch;
+      margin: auto;
+      grid-template:
+        "a a"12vh "b c"60vh "d d"3ch / 1fr 1fr;
+      height: 100vh;
+      overflow: hidden;
+      background: linear-gradient(to bottom, white 33%, blue 33% 66%, red 66%);
+    }
+
+    textarea {
+      font-size: larger;
+      font-family: sans-serif;
+    }
+
+    header {
+      font-family: 'Courier New', Courier, monospace;
+      font-weight: bolder;
+      text-align: center;
+      font-size: 32px;
+      margin: auto;
+      grid-area: a;
+    }
+
+    button {
+      grid-area: d;
+    }
+  </style>
+</head>
+
+<body>
+  <header> RUSSKIJ → РУССКИЙ</header>
+  <textarea name="input" id="input" cols="40" rows="10" spellcheck="false"
+    placeholder="Russkij tekst goes here"></textarea>
+  <textarea name="output" id="output" cols="40" rows="10" placeholder="Русский текст отсюда"></textarea>
+  <button id="copy">Copy To Clipboard!</button>
+  <script type="module">
+    import { cyrillate } from 'cyrillator.js'
+
+    const inputBox = document.querySelector('textarea[name="input"]')
+    const outputBox = document.querySelector('textarea[name="output"]')
+    inputBox.addEventListener('input', () => {
+      outputBox.value = cyrillate(inputBox.value)
+    })
+    document.querySelector('button#copy').addEventListener('click', () => {
+      navigator.clipboard.writeText(outputBox.value)
+    })
+  </script>
+</body>
+
+</html>
