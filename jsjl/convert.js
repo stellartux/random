@@ -136,7 +136,7 @@ function convert(text) {
 const polys = {
   randstring: {
     backfill: 'randstring(range, len) = join(rand([range...], len))',
-    frontfill: 'using Random',
+    frontfill: 'using Random: randstring',
   },
   '-- default randstring': {
     backfill:
@@ -165,7 +165,7 @@ const polys = {
   },
   shufflestring: {
     description: 'shuffle(::String)',
-    endfill: 'shuffle(s::String) = join(shuffle!(split(s, "")), "")',
+    endfill: 'import Random: shuffle\nshuffle(s::String) = [s...] |> shuffle |> join',
   },
   nothing: {
     description: 'Nothing',
@@ -210,6 +210,7 @@ function pasteCopy() {
     })
 }
 
+// TODO: remove this
 function polyfills() {
   const backs = new Set()
   const fronts = new Set()
