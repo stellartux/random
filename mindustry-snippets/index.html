@@ -10,16 +10,12 @@
       display: grid;
       margin: auto;
       max-width: 60ch;
+      justify-items: center;
     }
 
     * {
       font-size: large;
       font-family: 'Courier New', Courier, monospace;
-    }
-
-    #settings {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
     }
 
     header {
@@ -28,6 +24,11 @@
       font-size: larger;
       font-weight: bold;
     }
+
+    select,
+    input {
+      display: span;
+    }
   </style>
 </head>
 
@@ -35,68 +36,81 @@
   <header>Mindustry Snippet Generator</header>
   <textarea name="output" id="output" cols="60" rows="8" spellcheck="false"></textarea>
   <section id="settings">
-    <label for="material">Material: </label>
-    <select id="material">
-      <option value="copper">Copper</option>
-      <option value="lead">Lead</option>
-      <option value="metaglass">Metaglass</option>
-      <option value="graphite">Graphite</option>
-      <option value="sand">Sand</option>
-      <option value="coal">Coal</option>
-      <option value="titanium">Titanium</option>
-      <option value="thorium">Thorium</option>
-      <option value="scrap">Scrap</option>
-      <option value="silicon">Silicon</option>
-      <option value="plastanium">Plastanium</option>
-      <option value="surge-alloy">Surge Alloy</option>
-      <option value="phase-fabric">Phase Fabric</option>
-      <option value="spore-pod">Spore Pod</option>
-      <option value="blast-compound">Blast Compound</option>
-      <option value="pyratite">Pyratite</option>
-    </select>
-    <label for="material-count">Material count:</label>
-    <input id="material-count" type="number" value=20900 min="0" max="21000">
-    <label for="machine">Machine:</label>
-    <select id="machine">
-      <option value="conveyor">Conveyor</option>
-      <option value="smelter">Silicon/Surge Smelter</option>
-      <option value="crucible">Crucible</option>
-      <option value="kiln">Kiln</option>
-      <option value="press">Graphite/Spore Press</option>
-      <option value="mixer">Cryofluid/Pyratite/Blast Mixer</option>
-      <option value="weaver">Phase Weaver</option>
-      <option value="compressor">Plastanium Compressor</option>
-      <option value="melter">Melter</option>
-      <option value="separator">Separator</option>
-      <option value="disassembler">Disassembler</option>
-      <option value="pulverizer">Pulverizer</option>
-      <option value="incinerator">Incinerator</option>
-      <option value="centrifuge">Coal Centrifuge</option>
-    </select>
-    <label></label>
-    <input id="copy" type="button" value="Copy to clipboard">
+    <p>
+      If there is <select id="comparative">
+        <option value="less">more</option>
+        <option value="greater">less</option>
+      </select> than <input id="material-count" type="number" value=20900 min="0" max="21000">
+      <select id="material">
+        <option>copper</option>
+        <option>lead</option>
+        <option>metaglass</option>
+        <option>graphite</option>
+        <option>sand</option>
+        <option>coal</option>
+        <option>titanium</option>
+        <option>thorium</option>
+        <option>scrap</option>
+        <option>silicon</option>
+        <option>plastanium</option>
+        <option value="surge-alloy">surge alloy</option>
+        <option value="phase-fabric">phase fabric</option>
+        <option value="spore-pod">spore pods</option>
+        <option value="blast-compound">blast compound</option>
+        <option>pyratite</option>
+      </select> in the <select id="store">
+        <option>vault</option>
+        <option>container</option>
+        <option>nucleus</option>
+        <option>foundation</option>
+        <option>core</option>
+      </select>, turn <select id="on-off">
+        <option value="0">off</option>
+        <option value="1">on</option>
+      </select> the <select id="machine">
+        <option>conveyor</option>
+        <option>smelter</option>
+        <option>crucible</option>
+        <option>kiln</option>
+        <option>press</option>
+        <option>mixer</option>
+        <option>weaver</option>
+        <option>compressor</option>
+        <option>melter</option>
+        <option>separator</option>
+        <option>disassembler</option>
+        <option>pulverizer</option>
+        <option>incinerator</option>
+        <option>centrifuge</option>
+      </select>.
+      <label></label>
+    </p>
   </section>
+  <input id="copy" type="button" value="Copy to clipboard">
   <script type="module">
-    const [material, count, machine, output] =
-      ['material', 'material-count', 'machine', 'output'].map(sel => document.getElementById(sel))
+    const [material, count, machine, output, store, comparative, onOff] =
+      ['material', 'material-count', 'machine', 'output', 'store', 'comparative', 'on-off'].map(sel => document.getElementById(sel))
+
+    function upperFirst(str) {
+      return str.split(/ /g).map(word => word[0].toUpperCase().concat(word.slice(1))).join(' ')
+    }
 
     function inputChanged() {
-      const selected = material.selectedOptions[0]
-      output.value = `sensor ${selected.value} nucleus1 @${selected.value}
-print "${selected.innerText}: "
-print ${selected.value}
-jump 6 lessThanEq ${selected.value} ${count.value}
+      output.value = `sensor ${material.value} ${store.value}1 @${material.value}
+print "${upperFirst(material.selectedOptions[0].innerText)}: "
+print ${material.value}
+jump 6 ${comparative.value}ThanEq ${material.value} ${count.value}
 print "\\nDeactivating ${machine.value}"
-control enabled ${machine.value}1 0 0 0 0
+control enabled ${machine.value}1 ${onOff.value} 0 0 0
 printflush message1`
     }
-    [material, count, machine].forEach(el => { el.addEventListener('change', inputChanged) })
+    [material, count, machine, store, comparative].forEach(el => { el.addEventListener('change', inputChanged) })
     inputChanged()
 
     document.getElementById('copy').addEventListener('click', () => {
       navigator.clipboard.writeText(output.value)
     })
-    material.focus()
+    onOff.focus()
   </script>
 </body>
 
