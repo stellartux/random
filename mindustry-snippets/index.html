@@ -7,15 +7,20 @@
   <title>Mindustry Code Snippets</title>
   <style>
     body {
-      display: grid;
+      display: flex;
+      flex-direction: column;
       margin: auto;
-      max-width: 60ch;
+      max-width: 65ch;
       justify-items: center;
+      gap: 0.5ch;
     }
 
     * {
       font-size: large;
       font-family: 'Courier New', Courier, monospace;
+      border-radius: 0.3ch;
+      background: #ddd;
+      color: #333;
     }
 
     @media (prefers-color-scheme: dark) {
@@ -28,7 +33,7 @@
     header {
       text-align: center;
       margin: 1ch;
-      font-size: larger;
+      font-size: x-large;
       font-weight: bold;
     }
 
@@ -36,19 +41,43 @@
     input {
       display: span;
     }
+
+    form {
+      display: flex;
+      gap: 1ch;
+      width: 100%;
+      margin: auto;
+      padding: 0.4ch 2ch;
+      transition: box-shadow 1s ease-in;
+      box-shadow: none;
+    }
+
+    form.submit {
+      box-shadow: 0 0 1ch #c808;
+      transition-duration: 0.05s;
+    }
+
+    input[type=submit] {
+      padding: 1ch;
+      margin: auto;
+    }
+
+    *:focus {
+      outline: thin dotted #c808;
+    }
+
   </style>
 </head>
 
 <body>
   <header>Mindustry Snippet Generator</header>
-  <textarea name="output" id="output" cols="60" rows="8" spellcheck="false"></textarea>
-  <section id="settings">
+  <form id="factory-limiter">
     <p>
-      If there is <select id="comparative">
+      If there is <select name="comparative">
         <option value="less">more</option>
         <option value="greater">less</option>
-      </select> than <input id="material-count" type="number" value=20900 min="0" max="21000">
-      <select id="material">
+      </select> than <input name="material-count" type="number" value=20900 min="0" max="21000">
+      <select name="material">
         <option>copper</option>
         <option>lead</option>
         <option>metaglass</option>
@@ -65,16 +94,16 @@
         <option value="spore-pod">spore pods</option>
         <option value="blast-compound">blast compound</option>
         <option>pyratite</option>
-      </select> in the <select id="store">
+      </select> in the <select name="store">
         <option>vault</option>
         <option>container</option>
         <option>nucleus</option>
         <option>foundation</option>
         <option>core</option>
-      </select>, turn <select id="on-off">
+      </select>, turn <select name="on-off">
         <option value="0">off</option>
         <option value="1">on</option>
-      </select> the <select id="machine">
+      </select> the <select name="machine">
         <option>conveyor</option>
         <option>smelter</option>
         <option>crucible</option>
@@ -90,34 +119,46 @@
         <option>incinerator</option>
         <option>centrifuge</option>
       </select>.
-      <label></label>
     </p>
-  </section>
-  <input id="copy" type="button" value="Copy to clipboard">
-  <script type="module">
-    const [material, count, machine, output, store, comparative, onOff] =
-      ['material', 'material-count', 'machine', 'output', 'store', 'comparative', 'on-off'].map(sel => document.getElementById(sel))
+    <input type="submit" value=" Copy " data-past="Copied" data-present=" Copy ">
+  </form>
 
+  <script>
     function upperFirst(str) {
-      return str.split(/ /g).map(word => word[0].toUpperCase().concat(word.slice(1))).join(' ')
+      return str
+        .split(/ /g)
+        .map((word) => word[0].toUpperCase().concat(word.slice(1)))
+        .join(' ')
     }
 
-    function inputChanged() {
-      output.value = `sensor ${material.value} ${store.value}1 @${material.value}
-print "${upperFirst(material.selectedOptions[0].innerText)}: "
-print ${material.value}
-jump 6 ${comparative.value}ThanEq ${material.value} ${count.value}
-print "\\nDeactivating ${machine.value}"
-control enabled ${machine.value}1 ${onOff.value} 0 0 0
+    const templates = {
+      'factory-limiter': (els) => `sensor ${els['material'].value} ${els['store'].value}1 @${els['material'].value}
+print "${upperFirst(els['material'].selectedOptions[0].innerText)}: "
+print ${els['material'].value}
+jump 6 ${els['comparative'].value}ThanEq ${els['material'].value} ${els['material-count'].value}
+print "\\nDeactivating ${els['machine'].value}"
+control enabled ${els['machine'].value}1 ${els['on-off'].value} 0 0 0
 printflush message1`
     }
-    [material, count, machine, store, comparative].forEach(el => { el.addEventListener('change', inputChanged) })
-    inputChanged()
 
-    document.getElementById('copy').addEventListener('click', () => {
-      navigator.clipboard.writeText(output.value)
+    document.querySelectorAll('form').forEach((form) => {
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault()
+        const els = ev.target.elements
+        navigator.clipboard.writeText(templates[form.id](els))
+        ev.target.classList.add('submit')
+        const button = ev.target.querySelector('input[type="submit"]')
+        button.value = button.dataset.past
+      })
+      form.addEventListener('transitionend', (ev) => {
+        if (ev.target.classList.contains('submit')) {
+          ev.target.classList.remove('submit')
+        } else {
+          const button = ev.target.querySelector('input[type="submit"]')
+          button.value = button.dataset.present
+        }
+      })
     })
-    onOff.focus()
   </script>
 </body>
 
