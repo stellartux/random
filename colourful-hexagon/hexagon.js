@@ -65,9 +65,11 @@ function loadImage(url) {
 
 const form = document.querySelector('form#pick-url')
 
-form.addEventListener('submit', (ev) => {
+form.addEventListener('submit', async (ev) => {
   ev.preventDefault()
-  changeImage(ev.target.querySelector('input[name="url-picker"]').value)
+  changeImage(
+    await loadImage(ev.target.querySelector('input[name="url-picker"]').value)
+  )
 })
 
 /**
@@ -80,14 +82,12 @@ const getColorIndicesForCoord = (x, y, width) => {
   return [red, red + 1, red + 2]
 }
 
-async function changeImage(url) {
+async function changeImage(image) {
   /*
   for x in range(0, 800):
       for y in range(0, 800):
           out.putpixel((x,y),(255,255,255))
   */
-
-  const image = await loadImage(url)
   canvas.width = image.width
   canvas.height = image.height
   ctx.drawImage(image, 0, 0)
@@ -176,4 +176,19 @@ document
   .querySelector('input[name="alpha"]')
   .addEventListener('change', () => debounce(colorHexagon, 200))
 
-changeImage('https://unsplash.it/600/600')
+changeImage(await loadImage('https://unsplash.it/600/600'))
+
+/** @type {HTMLInputElement} */
+const filePicker = document.querySelector('input[name="file-picker"]')
+filePicker.addEventListener('change', async () => {
+  const files = filePicker.files
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+
+    if (!file.type.startsWith('image/')) {
+      continue
+    }
+
+    changeImage(await createImageBitmap(file))
+  }
+})
