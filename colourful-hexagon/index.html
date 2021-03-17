@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colourful Hexagon</title>
+  <script src="hexagon.js" type="module"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <form id="pick-url">
+      <input type="url" name="url-picker" placeholder="Enter the URL of an image file"
+        value="https://unsplash.it/600/600"></input>
+      <button type="submit">Load</button>
+    </form>
+  </header>
+  <div id="canvas-container">
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <canvas id="other-canvas" width="600" height="600"></canvas>
+  </div>
+</body>
+
+</html>
