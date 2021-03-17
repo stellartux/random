@@ -11,17 +11,25 @@
 </head>
 
 <body>
-  <header>
-    <form id="pick-url">
-      <input type="url" name="url-picker" placeholder="Enter the URL of an image file"
-        value="https://unsplash.it/600/600"></input>
-      <button type="submit">Load</button>
-    </form>
-  </header>
-  <div id="canvas-container">
-    <canvas id="canvas" width="600" height="600"></canvas>
-    <canvas id="other-canvas" width="600" height="600"></canvas>
-  </div>
+  <main>
+    <header>
+      <form id="pick-url">
+        <input type="url" name="url-picker" placeholder="Enter the URL of an image file" width="30ch"
+          value="https://unsplash.it/600/600"></input>
+        <button type="submit">Load</button>
+      </form>
+      <label>Dot size:
+        <input type="range" name="spot-size" value="3" min="1" max="10"></input>
+      </label>
+      <label>Alpha: 
+        <input type="range" name="alpha" value="20" min="3" max="32"></input>
+      </label>
+    </header>
+    <div id="canvas-container">
+      <canvas id="canvas" width="600" height="600"></canvas>
+      <canvas id="other-canvas" width="600" height="600"></canvas>
+    </div>
+  </main>
 </body>
 
 </html>

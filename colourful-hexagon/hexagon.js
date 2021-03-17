@@ -39,7 +39,7 @@ def torgb(c):
  * @param {number[]} color rgb
  */
 function toRGB(color) {
-  return color.map((col) => 255 * (1 - col) | 0)
+  return color.map((col) => (255 * (1 - col)) | 0)
 }
 
 /**
@@ -67,7 +67,7 @@ const form = document.querySelector('form#pick-url')
 
 form.addEventListener('submit', (ev) => {
   ev.preventDefault()
-  colorHexagon(ev.target.querySelector('input[name="url-picker"]').value)
+  changeImage(ev.target.querySelector('input[name="url-picker"]').value)
 })
 
 /**
@@ -80,7 +80,7 @@ const getColorIndicesForCoord = (x, y, width) => {
   return [red, red + 1, red + 2]
 }
 
-async function colorHexagon(url) {
+async function changeImage(url) {
   /*
   for x in range(0, 800):
       for y in range(0, 800):
@@ -91,9 +91,12 @@ async function colorHexagon(url) {
   canvas.width = image.width
   canvas.height = image.height
   ctx.drawImage(image, 0, 0)
-  
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+  colorHexagon()
+}
 
+function colorHexagon() {
+  otherCanvas.classList.add('waiting')
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
   const colours = []
 
   for (let x = 0; x < canvas.width; x++) {
@@ -106,23 +109,26 @@ async function colorHexagon(url) {
     }
   }
 
-  window.superColours = colours
-
-  otherCtx.fillStyle = 'white'
-  otherCtx.fillRect(0, 0, otherCanvas.width, otherCanvas.height)
+  otherCtx.clearRect(0, 0, otherCanvas.width, otherCanvas.height)
   otherCtx.stroke = 'none'
+
+  const spotSize = parseInt(
+    document.querySelector('input[name="spot-size"]').value
+  )
+  const alpha = parseInt(document.querySelector('input[name="alpha"]').value)
 
   colours.forEach((rgb) => {
     const cmy = toCMY(rgb)
     const [u, v] = calculateOffset(cmy)
     const x = (otherCanvas.width / 2.1) * u + otherCanvas.width / 2
     const y = (otherCanvas.height / 2.1) * v + otherCanvas.height / 2
-    
-    otherCtx.fillStyle = toHex(toRGB(cmy))
+
+    otherCtx.fillStyle = toHex(toRGB(cmy).concat(alpha))
     otherCtx.beginPath()
-    otherCtx.arc(x, y, 2, 0, Math.PI * 2)
+    otherCtx.arc(x, y, spotSize, 0, Math.PI * 2)
     otherCtx.fill()
   })
+  otherCanvas.classList.remove('waiting')
 }
 
 /*
@@ -146,4 +152,28 @@ function calculateOffset(c) {
   return [u, v]
 }
 
-window.onload = () => document.querySelector('button').click()
+/** @type {number | null} */
+let debounceRef = null
+/**
+ * Debounces a function so it can only be called once in the given time period
+ * @param {Function} func the function to be called
+ * @param {number} [time = 100] the debounce period, in milliseconds
+ */
+export function debounce(func, time = 100) {
+  if (!debounceRef) {
+    debounceRef = setTimeout(() => {
+      func()
+      debounceRef = null
+    }, time)
+  }
+}
+
+document
+  .querySelector('input[name="spot-size"]')
+  .addEventListener('change', () => debounce(colorHexagon, 200))
+
+document
+  .querySelector('input[name="alpha"]')
+  .addEventListener('change', () => debounce(colorHexagon, 200))
+
+changeImage('https://unsplash.it/600/600')

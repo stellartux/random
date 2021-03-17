@@ -1,11 +1,20 @@
 body {
+  background-color: #666666;
   display: flex;
-  width: 100%;
-  margin: auto;
-  background-color: #888888;
+  font-family: sans-serif;
+  color: #eeeeff;
 }
 
-#canvas-container {
+main {
+  margin: auto;
+}
+
+#canvas-container, header {
   display: flex;
   flex-direction: row;
+  gap: 3em;
+}
+
+.waiting {
+  outline: medium red;
 }
