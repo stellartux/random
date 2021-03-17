@@ -90,6 +90,8 @@ async function changeImage(image) {
   */
   canvas.width = image.width
   canvas.height = image.height
+  canvas.style.maxHeight = image.height
+  canvas.style.minWidth = image.width
   ctx.drawImage(image, 0, 0)
   colorHexagon()
 }

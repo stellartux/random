@@ -18,3 +18,12 @@ main {
 .waiting {
   outline: medium red;
 }
+
+canvas {
+  margin: auto;
+}
+
+#other-canvas {
+  aspect-ratio: 1/1;
+  
+}
