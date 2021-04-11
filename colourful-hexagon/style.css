@@ -13,6 +13,7 @@ main {
   display: flex;
   flex-direction: row;
   gap: 3em;
+  align-items: center;
 }
 
 .waiting {
@@ -25,5 +26,4 @@ canvas {
 
 #other-canvas {
   aspect-ratio: 1/1;
-  
 }
