@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scriptydoo</title>
+  <link rel="icon" href="../favicon.ico">
+  <meta property="og:title" content="Scriptydoo">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://stellartux.github.io/random/scriptydoo">
+  <meta property="og:locale" content="en_GB">
+  <meta name="description" property="og:description"
+    content="A web app for quickly applying a transformation to some text with JavaScript.">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#444444">
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: auto;
+      padding: 0;
+      font-family: "Source Code Pro", monospace;
+    }
+
+    :root {
+      --foreground: #333333;
+      --background: #dddddd;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      * {
+        --foreground: #dddddd;
+        --background: #333333;
+      }
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      background-color: var(--background);
+      color: var(--foreground);
+      overflow: hidden;
+    }
+
+    main {
+      display: grid;
+      grid-template: 1fr 10fr 1fr / 1fr 1fr 1fr;
+      width: 99vw;
+      height: 90vh;
+      padding: 1ch;
+      align-items: center;
+      justify-content: center;
+      align-content: center;
+      gap: 2ch;
+    }
+
+    textarea,
+    section {
+      height: 100%;
+      width: 100%;
+      margin: auto;
+    }
+
+    textarea[name="input"] {
+      grid-area: 2 / 1 / 4 / 2;
+    }
+
+    main>section#scriptarea {
+      grid-area: 2 / 2 / 3 / 3;
+    }
+
+    textarea[name="output"] {
+      grid-area: 2 / 3 / 4 / 4;
+    }
+
+    #run {
+      align-self: center;
+      padding: 0.5em;
+      border-radius: 0.5em;
+      cursor: pointer;
+      grid-area: 3 / 2 / 4 / 3;
+    }
+
+    #scriptarea {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    textarea[name="script"] {
+      padding-left: 2ch;
+    }
+
+    pre {
+      width: 100%;
+    }
+
+    pre:first-child {
+      margin-bottom: 0;
+    }
+
+    pre:last-child {
+      margin-top: 0;
+    }
+
+    header {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      padding-top: 0.1rem;
+      font-size: 1.4rem;
+    }
+
+  </style>
+</head>
+
+<body>
+  <header>Scriptydoo: run some code on some text</header>
+  <main>
+    <textarea name="input" placeholder="Paste some text here" spellcheck="false" autocomplete="off"></textarea>
+    <section id="scriptarea">
+      <pre>function (text) {</pre>
+      <textarea name="script" placeholder="// write some JavaScript here" spellcheck="false"
+        autocomplete="off"></textarea>
+      <pre>}</pre>
+    </section>
+    <textarea name="output" placeholder="Transformed text appears here" spellcheck="false"
+      autocomplete="off"></textarea>
+    <button id="run">Run (Ctrl + Enter)</button>
+  </main>
+  <script>
+    var input = document.querySelector('[name="input"]'),
+      script = document.querySelector('[name="script"]'),
+      output = document.querySelector('[name="output"]')
+    runButton = document.querySelector('button#run')
+
+    function run() {
+      output.value = (new Function('text', script.value))(input.value)
+    }
+
+    document.addEventListener('keydown', function (event) {
+      if (event.ctrlKey && event.key === 'Enter') {
+        run()
+      }
+    })
+    runButton.addEventListener('click', run)
+  </script>
+</body>
+
+</html>
