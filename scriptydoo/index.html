@@ -10,8 +10,7 @@
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://stellartux.github.io/random/scriptydoo">
   <meta property="og:locale" content="en_GB">
-  <meta name="description" property="og:description"
-    content="A web app for quickly applying a transformation to some text with JavaScript.">
+  <meta name="description" property="og:description" content="run some code on some text">
   <meta name="twitter:card" content="summary">
   <meta name="theme-color" content="#444444">
 
@@ -74,12 +73,17 @@
       grid-area: 2 / 3 / 4 / 4;
     }
 
-    #run {
+    #buttons {
+      grid-area: 3 / 2 / 4 / 3;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #buttons>button {
       align-self: center;
       padding: 0.5em;
       border-radius: 0.5em;
       cursor: pointer;
-      grid-area: 3 / 2 / 4 / 3;
     }
 
     #scriptarea {
@@ -127,24 +131,44 @@
     </section>
     <textarea name="output" placeholder="Transformed text appears here" spellcheck="false"
       autocomplete="off"></textarea>
-    <button id="run">Run (Ctrl + Enter)</button>
+    <section id="buttons">
+      <button id="run">Run (Ctrl + Enter)</button>
+      <button id="swap">Swap (Ctrl + Left Arrow)</button>
+    </section>
   </main>
   <script>
     var input = document.querySelector('[name="input"]'),
       script = document.querySelector('[name="script"]'),
-      output = document.querySelector('[name="output"]')
-    runButton = document.querySelector('button#run')
+      output = document.querySelector('[name="output"]'),
+      runButton = document.querySelector('button#run'),
+      swapButton = document.querySelector('button#swap')
 
     function run() {
       output.value = (new Function('text', script.value))(input.value)
     }
 
+    function swap() {
+      input.value = output.value
+      output.value = ''
+    }
+
     document.addEventListener('keydown', function (event) {
-      if (event.ctrlKey && event.key === 'Enter') {
-        run()
+      if (event.ctrlKey) {
+        if (event.key === 'Enter') {
+          run()
+        } else if (event.key === 'ArrowLeft') {
+          swap()
+        }
+      } else if (event.key === 'Tab' && document.activeElement === script) {
+        event.preventDefault()
+        if (!event.shiftKey) {
+          script.setRangeText('  ', script.selectionStart, script.selectionEnd, 'end')
+        }
       }
     })
+
     runButton.addEventListener('click', run)
+    swapButton.addEventListener('click', swap)
   </script>
 </body>
 
