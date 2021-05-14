@@ -127,7 +127,7 @@
       <pre>function (text) {</pre>
       <textarea name="script" placeholder="// write some JavaScript here" spellcheck="false"
         autocomplete="off">return '[\n' + text.split('\n')
-  .map(line => `  "${line.replaceAll(/"/g, '\\"')}"`)
+  .map(line => `  "${line.replaceAll(/(\\|")/g, '\\$1')}"`)
   .join(',\n') + '\n]'
       </textarea>
       <pre>}</pre>
