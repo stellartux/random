@@ -126,7 +126,10 @@
     <section id="scriptarea">
       <pre>function (text) {</pre>
       <textarea name="script" placeholder="// write some JavaScript here" spellcheck="false"
-        autocomplete="off"></textarea>
+        autocomplete="off">return '[\n' + text.split('\n')
+  .map(line => `  "${line.replaceAll(/"/g, '\\"')}"`)
+  .join(',\n') + '\n]'
+      </textarea>
       <pre>}</pre>
     </section>
     <textarea name="output" placeholder="Transformed text appears here" spellcheck="false"
