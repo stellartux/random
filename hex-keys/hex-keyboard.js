@@ -7,12 +7,21 @@ if (access.outputs.length === 1) {
 }
 window.keymap = null
 
-for (const output of access.outputs) {
-  const option = document.createElement('option')
-  option.value = output[0]
-  option.innerText = output[1].name
-  midiOutputSelect.append(option)
+function reloadOutputs() {
+  while (midiOutputSelect.length > 1) {
+    midiOutputSelect.removeChild(midiOutputSelect.lastChild)
+  }
+  for (const output of access.outputs) {
+    const option = document.createElement('option')
+    option.value = output[0]
+    option.innerText = output[1].name
+    midiOutputSelect.append(option)
+  }
 }
+reloadOutputs()
+
+document.getElementById('refresh-outputs').addEventListener('click', reloadOutputs)
+
 midiOutputSelect.onchange = () => {
   midiOutput = access.outputs.get(midiOutputSelect.value)
 }
@@ -25,7 +34,7 @@ async function loadKeymap(url) {
   const file = await fetch(url)
   keymap = await file.json()
 }
-loadKeymap('piano-layout.json')
+loadKeymap('piano-keymap.json')
 
 document.addEventListener('keydown', (event) => {
   if (!event.repeat && Object.keys(keymap).includes(event.code)) {
