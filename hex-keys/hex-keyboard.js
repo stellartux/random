@@ -1,5 +1,11 @@
 const access = await navigator.requestMIDIAccess({ sysex: true })
 const midiOutputSelect = document.getElementById('midi-outputs')
+const octaveTranspose = document.getElementById('octave-transpose')
+const semitoneTranspose = document.getElementById('semitone-transpose')
+
+function transposeAdjust(pitch) {
+  return pitch + Number(semitoneTranspose.value) + Number(octaveTranspose.value) * 12
+}
 
 let midiOutput
 if (access.outputs.length === 1) {
@@ -35,16 +41,17 @@ async function loadKeymap(url) {
   keymap = await file.json()
 }
 loadKeymap('piano-keymap.json')
+document.getElementById('keymap-select').addEventListener('change', ({target: { value }}) => loadKeymap(value))
 
 document.addEventListener('keydown', (event) => {
   if (!event.repeat && Object.keys(keymap).includes(event.code)) {
-    noteOn(keymap[event.code])
+    noteOn(transposeAdjust(keymap[event.code]))
   }
 })
 
 document.addEventListener('keyup', (event) => {
   if (Object.keys(keymap).includes(event.code)) {
-    noteOff(keymap[event.code])
+    noteOff(transposeAdjust(keymap[event.code]))
   }
 })
 

@@ -21,6 +21,18 @@
     <option value="" disabled="true" selected>Choose a MIDI output</option>
   </select>
   <button type="button" id="refresh-outputs">Refresh MIDI Outputs</button>
+  <select id="keymap-select">
+    <option value="" disabled="true">Choose a layout</option>
+    <option value="piano-keymap.json" selected>Piano Layout</option>
+  </select>
+  <label for="semitone-transpose">
+    Semitone Transpose:
+  </label>
+  <input type="number" id="semitone-transpose" min="-11" value="0" max="11" step="1" />
+  <label for="octave-transpose">
+    Octave Transpose:
+  </label>
+  <input type="number" id="octave-transpose" min="-5" value="0" max="5" step="1" />
   <input type="file" id="keymap-file" accept="application/json"></input>
 
   <script src="hex-keyboard.js" type="module"></script>
