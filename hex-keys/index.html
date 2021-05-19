@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hex Keyboard Demo</title>
+  <link rel="icon" href="./favicon.png">
+  <meta property="og:title" content="Hex Keyboard Demo</title>">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://stellartux.github.io/">
+  <meta property="og:locale" content="en_GB">
+  <meta name="description" property="og:description" content="Demo for a Qwerty MIDI keyboard.">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#444444">
+</head>
+
+
+<body>
+  <select id="midi-outputs">
+    <option value="" disabled="true" selected>Choose a MIDI output</option>
+  </select>
+  <input type="file" id="keymap-file" accept="application/json"></input>
+
+  <script src="hex-keyboard.js" type="module"></script>
+</body>
+
+</html>
