@@ -44,7 +44,7 @@ function convert(text) {
     ],
     // Test.assertEquals(x, y, z) to @fact x --> y
     [
-      /^\s*(?:[tT]est\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gim,
+      /^\s*(?:[tT]est\.)?assert\.?_?(?:[dD]eep|[sS]trict)?_?[eE]quals?\s*\((.+?\(.*?\))\s*,\s*(.+?),\s*["'](.+?)["']\)+;?/gim,
       (match, p1, p2, p3) => {
         return (
           '        @fact ' +
@@ -59,7 +59,7 @@ function convert(text) {
     ],
     // Test.assertEquals(x, y) to @fact x --> y
     [
-      /^\s*(?:[tT]est\.)?assert\.?(?:[dD]eep|[sS]trict)?[eE]quals?\((.+?\(.*?\))\s*,\s*(.+?)\);?/gim,
+      /^\s*(?:[tT]est\.)?assert\.?(?:[dD]eep|[sS]trict)?_?[eE]quals?\((.+?\(.*?\))\s*,\s*(.+?)\);?/gim,
       (match, p1, p2) => {
         return (
           '        @fact ' +
@@ -74,12 +74,12 @@ function convert(text) {
     ],
     // Test.assertSimilar(x, y) to @fact x --> roughly(y)
     [
-      /^\s*[tT]est\.assertSimilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gim,
+      /^\s*[tT]est\.assert_?[sS]imilar\((.+?(?:\(.+?\))?)\s*,\s*(.+?)\);?/gim,
       '        @fact $1 --> $2',
     ],
     // assert.throw(x, y) to @fact_throws y x
     [
-      /^\s*(?:[tT]est\.)?assert\.?[tT]hrows?\s*\( *(.+), *(.+) *\)/gm,
+      /^\s*(?:[tT]est\.)?assert\.?_?[tT]hrows?\s*\( *(.+), *(.+) *\)/gm,
       '        @fact_throws $2 $1',
     ],
     // assert.throw(x) to @fact_throws x
