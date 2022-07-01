@@ -1,5 +1,4 @@
 import { parse } from 'https://deno.land/std@0.145.0/flags/mod.ts'
-import { extname } from 'https://deno.land/std@0.145.0/path/mod.ts'
 import { readAll } from 'https://deno.land/std@0.145.0/streams/conversion.ts'
 import { convert } from './main.js'
 
@@ -26,6 +25,8 @@ async function cli(): Promise<void> {
     --to='${[...new Set(Object.values(extToLang))].join("','")}'
         Choose the output language. Defaults to 'Julia'. 
         Short versions of the language name may also be used.
+    --preamble, --no-preamble
+        Choose whether to print the language's CodeWars preamble.
     `)
     return
   }
@@ -40,20 +41,18 @@ async function cli(): Promise<void> {
 
   if (args._.length === 0) {
     console.log(
-      convert(
-        decoder.decode(await readAll(Deno.stdin)),
-        args.to,
-        args.from ?? 'JavaScript'
-      )
+      convert(decoder.decode(await readAll(Deno.stdin)), {
+        outputLanguage: args.to,
+        showPreamble: args.preamble,
+      })
     )
   } else {
     for (const filename of args._) {
       console.log(
-        convert(
-          decoder.decode(Deno.readFileSync(filename as string)),
-          args.to,
-          extToLang[extname(filename as string)] ?? 'JavaScript'
-        )
+        convert(decoder.decode(Deno.readFileSync(filename as string)), {
+          outputLanguage: args.to,
+          showPreamble: args.preamble,
+        })
       )
     }
   }

@@ -32,7 +32,7 @@
     }
 
     textarea {
-      height: calc(99vh - 4rem);
+      height: calc(99vh - 6em);
     }
 
     select {
@@ -68,6 +68,8 @@ describe("the function", function(){
       <option selected>Julia</option>
       <option>Lua</option>
     </select>
+    <div></div>
+    <div><label>Show preamble: <input id="show-preamble" type="checkbox" checked /></label></div>
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
@@ -79,6 +81,8 @@ describe("the function", function(){
     const output = document.getElementById('output')
     /** @type {HTMLSelectElement} */
     const outputLanguage = document.getElementById('to')
+    /** @type {HTMLInputElement} */
+    const showPreamble = document.getElementById('show-preamble')
 
     function debounce(fn, delay = 200) {
       let debounceRef
@@ -89,7 +93,10 @@ describe("the function", function(){
     }
 
     function convertCode() {
-      output.value = convert(input.value, outputLanguage.value)
+      output.value = convert(input.value, {
+        outputLanguage: outputLanguage.value,
+        showPreamble: showPreamble.checked
+      })
       return output.value
     }
 
@@ -97,6 +104,7 @@ describe("the function", function(){
 
     input.addEventListener('input', onInput)
     outputLanguage.addEventListener('change', onInput)
+    showPreamble.addEventListener('change', onInput)
     onInput()
 
     document.getElementById('copy').addEventListener('click', () => {
@@ -109,8 +117,13 @@ describe("the function", function(){
     })
 
     window.addEventListener('load', () => {
-      if (window.localStorage && localStorage.getItem('input')) {
-        input.value = localStorage.getItem('input')
+      for (const [id, value] of Object.entries(localStorage)) {
+        const el = document.getElementById(id)
+        if (el.type === 'checkbox') {
+          el.checked = (value === 'true')
+        } else {
+          el.value = value
+        }
       }
       for (const [key, value] of new URLSearchParams(location.search)) {
         const el = document.getElementById(key)
@@ -121,7 +134,15 @@ describe("the function", function(){
     })
 
     window.addEventListener('visibilitychange', () => {
-      window.localStorage.setItem('input', input.value)
+      for (const el of document.querySelectorAll('[id]')) {
+        if (el.id === 'output') {
+          continue
+        } else if (el.type === 'checkbox') {
+          window.localStorage.setItem(el.id, el.checked)
+        } else if (el.value) {
+          window.localStorage.setItem(el.id, el.value)
+        }
+      }
     })
 
   </script>

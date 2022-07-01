@@ -28,9 +28,9 @@ const generics = {
   ArrowFunctionExpression: function (ast, i) {
     return this.FunctionExpression(ast, i)
   },
-  AssignmentExpression: function ({ id, left, right }, i) {
+  AssignmentExpression: function ({ id, left, operator, right }, i) {
     const rhs = this.toCode(right ?? id, i)
-    return this.toCode(left ?? id, i) + (rhs ? ' = ' + rhs : '')
+    return this.toCode(left ?? id, i) + (rhs ? ' ' + operator + ' ' + rhs : '')
   },
   BinaryExpression: function ({ operator, left, right }) {
     const result = [this.toCode(left), this.toOperator(operator), this.toCode(right)]
@@ -149,9 +149,9 @@ const generics = {
     const result = [this.indent(i)]
     const ids = []
     const inits = []
-    for (const declaration of declarations) {
-      ids.push(declaration.id)
-      inits.push(declaration.init)
+    for (const { id, init } of declarations) {
+      ids.push(id)
+      inits.push(init)
     }
     result.push(this.list(ids))
     while (inits.at(-1) === null) {
@@ -163,11 +163,23 @@ const generics = {
     }
     return result.join('')
   },
+  WhileStatement: function ({ body, test }, i) {
+    return this.indent(i) + 'while ' + this.test(test, i) + ' ' + this.toCode(body, i)
+  }
 }
 
 const CommonLisp = {
   ArrayExpression: function ({ elements }, i) {
     return `(list ${this.list(elements, i)})`
+  },
+  AssignmentExpression: function ({ id, left, operator, right }, i) {
+    const lhs = this.toCode(left ?? id, i)
+    const rhs = this.toCode(right ?? id, i)
+    if (operator === '=') {
+      return `(setf ${lhs} ${rhs})`
+    } else {
+      return `(setf ${lhs} (${operator[0]} ${lhs} ${rhs}))`
+    }
   },
   BinaryExpression: function ({ operator, left, right }, i) {
     if ((operator === '==' || operator === '===') && right.type === 'Literal' && typeof right.value === 'number') {
@@ -176,7 +188,7 @@ const CommonLisp = {
     return `(${this.toOperator(operator)} ${this.toCode(left, i)} ${this.toCode(right, i)})`
   },
   BlockStatement: function ({ body }, i) {
-    return body.map((x) => this.toCode(x, i + 1)).join(this.indent(i + 1) + '\n')
+    return body.map((x) => this.toCode(x, i)).join('\n')
   },
   CallExpression: function (ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert') {
@@ -207,7 +219,7 @@ const CommonLisp = {
         '(loop for ', this.toCode(init.declarations[0].id),
         ' from ', this.toCode(init.declarations[0].init),
         ' to ', , this.toCode(test.right, i),
-        ' do ', this.toCode(body, i), ')'
+        ' do ', this.toCode(body, i + 6), ')'
       ].join('')
     }
   },
@@ -217,16 +229,16 @@ const CommonLisp = {
     result.push(`(${this.list(params)})`)
     if (body.type === 'BlockStatement' && body.body.length === 1) {
       const stmt = body.body[0]
-      result.push(this.toCode(stmt.type === 'ReturnStatement' ? stmt.argument : stmt))
+      result.push(this.toCode(stmt.type === 'ReturnStatement' ? stmt.argument : stmt, i))
     } else {
-      result.push('\n' + this.toCode(body, i))
+      result.push('\n' + this.toCode(body, i + 2))
     }
     return this.indent(i) + `(${result.join(' ')})`
   },
   Identifier: ({ name }) => toKebabCase(name),
   IfStatement: function ({ alternate, consequent, test }, i) {
     if (alternate) {
-      return `(if ${this.test(test, i)} \n${this.toCode(consequent, i)} \n${this.toCode(alternate, i)})`
+      return `(if ${this.test(test, i)}\n${this.toCode(consequent, i + 4)}\n${this.toCode(alternate, i + 4)})`
     } else if (consequent.type === 'ExpressionStatement') {
       return `(when ${this.test(test, i)} ${this.toCode(consequent, i)})`
     } else if (consequent.type === 'BlockStatement' && consequent.body.length === 1) {
@@ -252,7 +264,7 @@ const CommonLisp = {
     if (object.name === 'Test') {
       return this.toCode(property, i)
     } else if (object.name === 'console') {
-      return property.name === 'log' ? 'princ' : 'print'
+      return 'print'
     } else if (property.name === 'length') {
       return `(length ${this.toCode(object, i)})`
     } else {
@@ -266,8 +278,9 @@ const CommonLisp = {
     return `(${this.toCode(key, i)} . ${this.toCode(value, i)})`
   },
   ReturnStatement: function ({ argument }, i) {
-    return this.indent(i) + `(${'return ' + this.toCode(argument)})`
+    return this.indent(i) + this.toCode(argument, i)
   },
+  tabWidth: 1,
   toOperator: function (op, i) {
     switch (op) {
       case '==': return 'equal'
@@ -276,11 +289,23 @@ const CommonLisp = {
     return generics.toOperator.call(this, op, i)
   },
   undefined: 'nil',
+  UpdateExpression: function ({ argument, operator, prefix }, i) {
+    if (operator === '++' || operator === '--') {
+      return `(${operator == '++' ? 'in' : 'de'}cf ${this.toCode(argument, i)})`
+    } else if (prefix) {
+      return this.toOperator(operator) + this.toCode(argument, i)
+    } else {
+      return this.toCode(argument, i) + this.toOperator(operator)
+    }
+  },
   VariableDeclaration: function ({ declarations }, i) {
-    return this.indent(i) + `(setq ${declarations
+    return this.indent(i) + `(setf ${declarations
       .map((decl) => `${this.toCode(decl.id, i)} ${this.toCode(decl.init, i)}`)
       .join(' ')
       })`
+  },
+  WhileStatement: function ({ body, test }, i) {
+    return `${this.indent(i)}(loop while ${this.test(test, i)}\n${this.indent(i)}   do ${this.toCode(body, i + 6).trimStart()})`
   }
 }
 Object.setPrototypeOf(CommonLisp, generics)
@@ -349,7 +374,7 @@ const Julia = {
         return `expected = ${rhs} \n${this.indent(i)} @fact ${lhs} --> expected "@fact ${lhs} --> $(repr(expected))"`
       }
     } else if (ast.callee.name === 'describe' || ast.callee.name === 'it') {
-      return `${ast.callee.name === 'describe' ? 'facts' : 'context'} (${this.toCode(ast.arguments[0], i)}) do${this.toCode(ast.arguments[1].body, i)} `
+      return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) do${this.toCode(ast.arguments[1].body, i)} `
     } else {
       return `${this.toCode(ast.callee, i)}(${ast.arguments.map((x) => this.toCode(x, i)).join(', ')})`
     }
@@ -365,7 +390,9 @@ const Julia = {
   },
   MemberExpression: function (ast, i) {
     if (ast.object.name === 'Math') {
-      return this.toCode(ast.property, i)
+      return {
+        random: 'rand',
+      }[ast.property] || ast.property
     } else if (ast.object.name === 'console') {
       return 'print'
     } else {
@@ -394,6 +421,15 @@ const Julia = {
     }
   },
   undefined: 'nothing',
+  UpdateExpression: function ({ argument, operator, prefix }, i) {
+    if (operator === '++' || operator === '--') {
+      return this.toCode(argument, i) + ' ' + operator[0] + '= 1'
+    } else if (prefix) {
+      return this.toOperator(operator) + this.toCode(argument, i)
+    } else {
+      return this.toCode(argument, i) + this.toOperator(operator)
+    }
+  },
 }
 Object.setPrototypeOf(Julia, generics)
 
@@ -401,9 +437,18 @@ const Lua = {
   ArrayExpression: function (ast, i) {
     return `{ ${this.list(ast.elements, i)} } `
   },
+  AssignmentExpression: function ({ id, left, operator, right }, i) {
+    const lhs = this.toCode(left ?? id, i)
+    const rhs = this.toCode(right ?? id, i)
+    if (operator === '=') {
+      return lhs + (right ? ' = ' + rhs : '')
+    } else {
+      return `${lhs} = ${lhs} ${operator[0]} ${rhs}`
+    }
+  },
   BlockStatement: function ({ body }, i) {
     return `\n${body.map((expr) => this.toCode(expr, i + 1))
-      .join(this.indent(i) + '\n')}\n${this.indent(i)}end`
+      .join('\n' + this.indent(i))}\n${this.indent(i)}end`
   },
   CallExpression: function (ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert') {
@@ -487,6 +532,16 @@ const Lua = {
     }
   },
   undefined: 'nil',
+  UpdateExpression: function ({ argument, operator, prefix }, i) {
+    if (operator === '++' || operator === '--') {
+      const arg = this.toCode(argument, i)
+      return `${arg} = ${arg} ${operator[0]} 1`
+    } else if (prefix) {
+      return this.toOperator(operator) + this.toCode(argument, i)
+    } else {
+      return this.toCode(argument, i) + this.toOperator(operator)
+    }
+  },
   VariableDeclaration: function (ast, i) {
     return this.indent(i) + 'local ' + generics.VariableDeclaration.call(this, ast, i).trimStart()
   }
@@ -648,9 +703,11 @@ function normalize(ast) {
 /**
  * 
  * @param {string} input 
- * @param {string} [outputLanguage='JavaScript']
- * @param {string} [inputLanguage='JavaScript']
+ * @param {object} [options]
+ * @param {string} [options.outputLanguage='JavaScript']
+ * @param {string} [options.showPreamble=true] 
  */
-export function convert(input, outputLanguage = 'JavaScript', inputLanguage = 'JavaScript') {
-  return preamble[outputLanguage] + languages[outputLanguage].toCode(normalize(parse(input, { ecmaVersion: 'latest' })))
+export function convert(input, { outputLanguage = 'JavaScript', showPreamble = true }) {
+  return (showPreamble ? preamble[outputLanguage] : '') +
+     languages[outputLanguage].toCode(normalize(parse(input, { ecmaVersion: 'latest' })))
 }
