@@ -1,4 +1,5 @@
-import { parse } from 'https://cdn.skypack.dev/espree@9.3.2'
+// import { parse } from 'https://cdn.skypack.dev/espree@9.3.2'
+import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.3.2-xGpgE2rj5eSDJMT99glR/mode=imports,min/optimized/espree.js'
 
 const identity = (x) => x
 
@@ -205,9 +206,9 @@ const CommonLisp = {
         }
       }
     } else if (ast.callee.name === 'describe') {
-      return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}\n${this.indent(i)}${this.toCode(ast.arguments[1].body, i)})`
+      return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}\n${this.toCode(ast.arguments[1].body, i + 1)})`
     } else if (ast.callee.name === 'it') {
-      return `(testing ${this.toCode(ast.arguments[0])}\n${this.toCode(ast.arguments[1].body, i)}`
+      return `(testing ${this.toCode(ast.arguments[0])}\n${this.toCode(ast.arguments[1].body, i + 1)}`
     } else {
       return this.indent(i) + '(' + [this.toCode(ast.callee, i), ...ast.arguments.map((x) => this.toCode(x, i))].join(' ') + ')'
     }
@@ -369,12 +370,12 @@ const Julia = {
       if (ast.callee.property.name === 'throws') {
         return `@fact_throws ${lhs} ${ast.arguments[1] ? rhs : ''} `
       } else if (ast.arguments[1].type !== 'CallExpression') {
-        return `@fact ${lhs} --> ${rhs} `
+        return `@fact ${lhs} --> ${rhs}`
       } else {
         return `expected = ${rhs} \n${this.indent(i)} @fact ${lhs} --> expected "@fact ${lhs} --> $(repr(expected))"`
       }
     } else if (ast.callee.name === 'describe' || ast.callee.name === 'it') {
-      return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) do${this.toCode(ast.arguments[1].body, i)} `
+      return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) do${this.toCode(ast.arguments[1].body, i)}`
     } else {
       return `${this.toCode(ast.callee, i)}(${ast.arguments.map((x) => this.toCode(x, i)).join(', ')})`
     }
@@ -703,11 +704,14 @@ function normalize(ast) {
 /**
  * 
  * @param {string} input 
- * @param {object} [options]
- * @param {string} [options.outputLanguage='JavaScript']
- * @param {string} [options.showPreamble=true] 
+ * @param {object|string} [options] or `options.outputLanguage`
+ * @param {string} [options.outputLanguage='JavaScript'] 'JavaScript' by default
+ * @param {string} [options.showPreamble=false] 'false' by default
+ * @returns {string}
  */
-export function convert(input, { outputLanguage = 'JavaScript', showPreamble = true }) {
+export function convert(input, options) {
+  const { outputLanguage = 'JavaScript', showPreamble = false } =
+    typeof (options) === 'object' ? options : { outputLanguage: options }
   return (showPreamble ? preamble[outputLanguage] : '') +
-     languages[outputLanguage].toCode(normalize(parse(input, { ecmaVersion: 'latest' })))
+    languages[outputLanguage].toCode(normalize(parse(input, { ecmaVersion: 'latest' })))
 }
