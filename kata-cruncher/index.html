@@ -106,9 +106,13 @@ describe("the function", function(){
         })
         input.setCustomValidity('')
         return output.value
-      } catch (_) {
+      } catch (error) {
         input.setCustomValidity('invalid')
-        return null
+        if (error.message.startsWith('Unimplemented: ')) {
+          console.log(error.message)
+        } else {
+          throw error
+        }
       }
     }
 
