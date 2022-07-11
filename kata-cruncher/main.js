@@ -148,7 +148,7 @@ const generics = {
     }
   },
   VariableDeclarator({ id, init }, i) {
-    return this.toCode(id) + (init ? ' = ' + this.toCode(init, i) : '')
+    return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
   },
   VariableDeclaration({ declarations }, i) {
     const result = [this.indent(i)]
@@ -376,11 +376,8 @@ const Julia = {
     return `(${params.map(x => this.toCode(x))}) -> ${this.toCode(body, i)} `
   },
   BlockStatement({ body }, i) {
-    const lines = body.slice(0, -1).map((x) => this.toCode(x, i + 1))
-    const last = body.at(-1)
-    lines.push(this.indent(i + 1) + (this.toCode((last.type === 'ReturnStatement' ? last.argument : last), i + 1)))
-    lines.push(this.indent(i) + 'end')
-    return '\n' + lines.join('\n')
+    return `\n${body.map((expr) => this.toCode(expr, i + 1))
+      .join('\n')}\n${this.indent(i)}end`
   },
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert' ||
@@ -413,7 +410,6 @@ const Julia = {
   },
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
-      console.dir(ast)
       const { body, init, test, update } = ast
       return [
         'for ',
@@ -438,6 +434,15 @@ const Julia = {
   },
   ForOfStatement({ body, left, right }, i) {
     return `for ${this.toCode(left, i)} in ${this.toCode(right, i)} ${this.toCode(body, i)}`
+  },
+  FunctionDeclaration(ast, i) {
+    const body = ast.body.body
+    const lastIndex = body.length - 1
+    if (body[lastIndex].type === 'ReturnStatement') {
+      body[lastIndex].type = 'ExpressionStatement'
+      body[lastIndex].expression = body[lastIndex].argument
+    }
+    return generics.FunctionDeclaration.call(this, ast, i)
   },
   Identifier: ({ name }) => {
     switch (name) {
