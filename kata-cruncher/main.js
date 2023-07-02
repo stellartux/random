@@ -196,8 +196,8 @@ const generics = {
     }
     return result.join('')
   },
-  WhileStatement({ body, test }, i) {
-    return this.indent(i) + 'while ' + this.test(test, i) + ' ' + this.toCode(body, i)
+  WhileStatement({ body, test }, i, opener = this.whileOpener) {
+    return this.indent(i) + 'while ' + this.test(test, i, opener) + this.toCode(body, i, this.whileOpener)
   }
 }
 
@@ -220,6 +220,13 @@ const sexpr = {
       return `(${right.type === 'Literal' && typeof right.value === 'number' ? '=' : 'equal?'} ${this.toCode(left, i)} ${this.toCode(right, i)})`
     }
     return `(${this.toOperator(operator)} ${this.toCode(left, i)} ${this.toCode(right, i)})`
+  },
+  BlockStatement(ast, i, ...xs) {
+    if (ast.body.length === 1) {
+      return `\n${this.toCode(ast.body[0], i, ...xs)}`
+    } else {
+      return generics.BlockStatement.call(this, ast, i, ...xs)
+    }
   },
   blockOpener: '(begin',
   blockClose() {
@@ -260,13 +267,24 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
     } else if (object.name === 'console') {
       return 'displayln'
     } else {
-      return `(assoc '${this.toCode(object, i)} '${this.toCode(property, i)})`
+      return `(assoc ${this.toCode(object, i)} '${this.toCode(property, i)})`
     }
+  },
+  NewExpression(ast, i) {
+    let type = this.toCode(ast.callee)
+    if (type === 'map') {
+      type = 'hash'
+    }
+    return `(make-${type}${ast.arguments.length ? ' ' + this.list(ast.arguments, i) : ''})`
   },
   ReturnStatement({ argument }, i) {
     return this.indent(i) + this.toCode(argument, i)
   },
   tabWidth: 1,
+  UpdateExpression({ argument, operator }, i) {
+    const id = this.toCode(argument)
+    return `(${this.assignmentKeyword} ${id} (${operator === '++' ? this.incrementFunction : this.decrementFunction} ${id}))`
+  },
   VariableDeclaration({ declarations }, i) {
     return this.indent(i) + `(${this.variableDeclarationKeyword} ${declarations
       .map((decl) => `${this.toCode(decl.id, i)} ${this.toCode(decl.init, i)}`)
@@ -348,7 +366,7 @@ const CommonLisp = {
   },
   variableDeclarationKeyword: 'defparameter',
   WhileStatement({ body, test }, i) {
-    return `${this.indent(i)}(loop while ${this.test(test, i)}\n${this.indent(i)}   do ${this.toCode(body, i + 6).trimStart()})`
+    return `${this.indent(i)}(loop while ${this.test(test, i)}\n${this.indent(i + 3)}do ${this.toCode(body, i + 6).trimStart()})`
   }
 }
 Object.setPrototypeOf(CommonLisp, sexpr)
@@ -397,7 +415,8 @@ const JavaScript = {
   undefined: 'undefined',
   VariableDeclaration(ast, i) {
     return this.indent(i) + ast.kind + ' ' + ast.declarations.map((d) => this.toCode(d, i)).join(', ')
-  }
+  },
+  whileOpener: ' {',
 }
 Object.setPrototypeOf(JavaScript, generics)
 
@@ -463,17 +482,17 @@ const Julia = {
         test.operator === '--'
           ? '1'
           : test.right.value + (test.operator.at(-1) === '=' ? 0 : -1),
-        this.toCode(body, i)
+        this.toCode(body, i, '')
       ].join('')
     }
     console.dir(ast)
     throw new Error('Unimplemented: ForStatement')
   },
   ForInStatement({ body, left, right }, i) {
-    return `for ${this.toCode(left, i)} in eachindex(${this.toCode(right, i)}) ${this.toCode(body, i)}`
+    return `for ${this.toCode(left, i)} in eachindex(${this.toCode(right, i)}) ${this.toCode(body, i, '')}`
   },
   ForOfStatement({ body, left, right }, i) {
-    return `for ${this.toCode(left, i)} in ${this.toCode(right, i)} ${this.toCode(body, i)}`
+    return `for ${this.toCode(left, i)} in ${this.toCode(right, i)} ${this.toCode(body, i, '')}`
   },
   FunctionDeclaration(ast, i) {
     const body = ast.body.body
@@ -536,6 +555,7 @@ const Julia = {
       return this.toCode(argument, i) + this.toOperator(operator)
     }
   },
+  whileOpener: '',
 }
 Object.setPrototypeOf(Julia, generics)
 
@@ -552,9 +572,8 @@ const Lua = {
       return `${lhs} = ${lhs} ${operator[0]} ${rhs}`
     }
   },
-  BlockStatement({ body }, i) {
-    return `\n${body.map((expr) => this.toCode(expr, i + 1))
-      .join('\n' + this.indent(i))}\n${this.indent(i)}end`
+  BlockStatement({ body }, i, blockOpen = this.blockOpen, blockClose = this.blockClose) {
+    return `\n${this.body(body, i, blockOpen, blockClose)}\n${this.indent(i)}end`
   },
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert') {
@@ -595,10 +614,10 @@ const Lua = {
           update.operator[0] === '+'
             ? update.operator[1] === '+'
               ? ''
-              : ', ' + update.right.raw
+              : ', ' + this.toCode(update.right)
             : update.operator[1] === '-'
               ? ', -1'
-              : ', -' + update.right.raw,
+              : ', -' + this.toCode(update.right),
           ' do',
           this.toCode(body, i)
         ].join('')
@@ -640,8 +659,8 @@ const Lua = {
     return keyStr + ' = ' + this.toCode(value, i)
   },
   tabWidth: 4,
-  test(ast, i) {
-    return `${this.toCode(ast, i)} then`
+  test(ast, i, keyword = ' then') {
+    return `${this.toCode(ast, i)}${keyword}`
   },
   ThisExpression: () => 'self',
   toOperator(op) {
@@ -677,7 +696,8 @@ const Lua = {
   },
   VariableDeclaration(ast, i) {
     return this.indent(i) + 'local ' + generics.VariableDeclaration.call(this, ast, i).trimStart()
-  }
+  },
+  whileOpener: ' do'
 }
 Object.setPrototypeOf(Lua, generics)
 
@@ -688,19 +708,36 @@ const Racket = {
   assignmentKeyword: 'set!',
   boolTrue: '#t',
   boolFalse: '#f',
+  decrementFunction: 'sub1',
+  ForStatement(ast, i) {
+    if (isNumericalForStatement(ast)) {
+      const decl = ast.init.declarations[0]
+      const id = this.toCode(decl.id)
+      let update = ''
+      if (ast.update?.type === 'UpdateExpression') {
+        update = ` (${ast.update.operator === '++' ? 'add' : 'sub'}1 ${id})`
+      } else if (ast.update) {
+        update = ` (${this.toOperator(ast.update.operator.slice(0, -1))} ${id} ${this.toCode(ast.update.right)})`
+      }
+      return `${this.indent(i)}(do ((${id} ${this.toCode(decl.init)}${update}))
+${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
+    } else {
+      throw new Error('Unimplemented: non-numerical for statement')
+    }
+  },
   functionDeclarationKeyword: '(define',
+  incrementFunction: 'add1',
   tabWidth: 1,
-  toOperator(op, i) {
+  toOperator(op) {
     switch (op) {
       case '==': return 'equal?'
-      case '===': return 'eql?'
+      case '===': return 'eq?'
     }
-    return generics.toOperator.call(this, op, i)
+    return generics.toOperator.call(this, op)
   },
   undefined: '#f',
   variableDeclarationKeyword: 'define',
   WhileStatement({ body, test }, i) {
-    console.dir(body)
     return `${this.indent(i)}(do () (${this.test(test, i)})
 ${this.body(body.body, i)})`
   }
