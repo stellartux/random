@@ -271,11 +271,12 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
     }
   },
   NewExpression(ast, i) {
-    let type = this.toCode(ast.callee)
+    const type = this.toCode(ast.callee)
     if (type === 'map') {
-      type = 'hash'
+      return ast.arguments.length ? `(make-hash '(${ast.arguments[0].elements.map((pair) => `(${pair.elements.map(this.toCode.bind(this)).join(' . ')})`)}))` : '(make-hash)'
+    } else {
+      return `(make-${type}${ast.arguments.length ? ' ' + this.list(ast.arguments, i) : ''})`
     }
-    return `(make-${type}${ast.arguments.length ? ' ' + this.list(ast.arguments, i) : ''})`
   },
   ReturnStatement({ argument }, i) {
     return this.indent(i) + this.toCode(argument, i)
@@ -561,7 +562,7 @@ Object.setPrototypeOf(Julia, generics)
 
 const Lua = {
   ArrayExpression(ast, i) {
-    return `{ ${this.list(ast.elements, i)} } `
+    return `{ ${this.list(ast.elements, i)} }`
   },
   AssignmentExpression({ id, left, operator, right }, i) {
     const lhs = this.toCode(left ?? id, i)
@@ -590,7 +591,7 @@ const Lua = {
       } else if (/throws?|errors?/i.test(ast.callee.property.name)) {
         return `assert.has_error(${args.join(', ')})`
       } else {
-        console.dir(`assert.${ast.callee.property.name}`)
+        console.warn(`assert.${ast.callee.property.name}`)
       }
     }
     return generics.CallExpression.call(this, ast, i)
@@ -601,7 +602,6 @@ const Lua = {
     const { body, init, test, type, update } = ast
     if (isNumericalForStatement(ast)) {
       if (test.operator[0] === '<' || test.operator[0] === '>') {
-        console.dir(update)
         return [
           'for ',
           this.toCode(init.declarations[0]),
@@ -624,13 +624,20 @@ const Lua = {
       }
     }
     console.dir(ast)
-    console.warn('ForStatement')
+    console.warn(`ForStatement: ${type}`)
   },
   ForOfStatement({ body, left, right }, i) {
-    return `for _, ${left.declarations.map((x) => this.toCode(x))} in ipairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
+    const id = left.declarations[0].id
+    let args = '_, '
+    if (id.type === 'Identifier') {
+      args += this.toCode(id)
+    } else {
+      args = this.list(id.elements)
+    }
+    return `for ${args} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
   },
   ForInStatement({ body, left, right }, i) {
-    return `for ${left.declarations.map((x) => this.toCode(x))} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
+    return `for ${this.toCode(left.declarations[0].id)} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
   },
   Identifier({ name }) {
     const keys = { Math: 'math' }
@@ -702,9 +709,6 @@ const Lua = {
 Object.setPrototypeOf(Lua, generics)
 
 const Racket = {
-  ArrayExpression({ elements }) {
-    return `#(${this.list(elements)})`
-  },
   assignmentKeyword: 'set!',
   boolTrue: '#t',
   boolFalse: '#f',
@@ -722,8 +726,18 @@ const Racket = {
       return `${this.indent(i)}(do ((${id} ${this.toCode(decl.init)}${update}))
 ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     } else {
+      console.dir(ast)
       throw new Error('Unimplemented: non-numerical for statement')
     }
+  },
+  ForOfStatement(ast, i) {
+    const { left, right, body } = ast
+    if (left.type === 'VariableDeclaration') {
+      const decl = left.declarations[0].id
+      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? this.toCode(decl) : `(${decl.elements.map(this.toCode.bind(this)).join(' ')})` } ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
+    } 
+    console.dir(ast)
+    throw new Error('Unhandled `for..of` statement')
   },
   functionDeclarationKeyword: '(define',
   incrementFunction: 'add1',
