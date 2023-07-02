@@ -44,7 +44,6 @@
       outline-color: orangered;
       outline-style: dashed;
     }
-
   </style>
 </head>
 
@@ -73,18 +72,21 @@ describe("the function", function(){
       <option>JavaScript</option>
       <option selected>Julia</option>
       <option>Lua</option>
+      <option>Racket</option>
     </select>
     <div></div>
     <div><label>Show preamble: <input id="show-preamble" type="checkbox" checked /></label></div>
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
-    import { convert } from './main.js'
+    import { from, to } from './main.js'
 
     /** @type {HTMLTextAreaElement} */
     const input = document.getElementById('input')
     /** @type {HTMLTextAreaElement} */
     const output = document.getElementById('output')
+    /** @type {HTMLSelectElement} */
+    const inputLanguage = document.getElementById('from')
     /** @type {HTMLSelectElement} */
     const outputLanguage = document.getElementById('to')
     /** @type {HTMLInputElement} */
@@ -101,6 +103,7 @@ describe("the function", function(){
     function convertCode() {
       try {
         output.value = convert(input.value, {
+          inputLanguage: inputLanguage.value,
           outputLanguage: outputLanguage.value,
           showPreamble: showPreamble.checked
         })
@@ -109,7 +112,7 @@ describe("the function", function(){
       } catch (error) {
         input.setCustomValidity('invalid')
         if (error.message.startsWith('Unimplemented: ')) {
-          console.log(error.message)
+          console.error(error.message)
         } else {
           throw error
         }
@@ -119,6 +122,7 @@ describe("the function", function(){
     const onInput = debounce(convertCode)
 
     input.addEventListener('input', onInput)
+    inputLanguage.addEventListener('change', onInput)
     outputLanguage.addEventListener('change', onInput)
     showPreamble.addEventListener('change', onInput)
     onInput()
@@ -160,6 +164,151 @@ describe("the function", function(){
         }
       }
     })
+
+    function normalize(ast) {
+      if (!ast) return
+      switch (ast.type) {
+        case 'ArrowFunctionExpression':
+        case 'FunctionExpression':
+          normalize(ast.id)
+          ast.params.forEach(normalize)
+          normalize(ast.body)
+          break
+
+        case 'AssignmentExpression':
+        case 'BinaryExpression':
+          normalize(ast.left)
+          normalize(ast.right)
+          break
+
+        case 'BlockStatement':
+        case 'Program':
+          ast.body.forEach(normalize)
+          break
+
+        case 'CallExpression':
+          normalize(ast.callee)
+          ast.arguments.forEach(normalize)
+          break
+
+        case 'ExpressionStatement':
+          normalize(ast.expression)
+          break
+
+        case 'Identifier':
+          if (/assert[-_ ]?Equals?/i.test(ast.name)) {
+            console.dir(ast)
+            ast.type = 'MemberExpression'
+            ast.object = { name: 'assert', type: 'Identifier', start: ast.start, end: ast.end }
+            ast.property = { name: 'deepEqual', type: 'Identifier', start: ast.start, end: ast.end }
+            ast.optional = false
+            ast.computed = false
+            delete ast.name
+          }
+          break
+
+        case 'IfStatement':
+          normalize(ast.test)
+          normalize(ast.consequent)
+          normalize(ast.alternate)
+          break
+
+        case 'MemberExpression':
+          if (ast.object.name === 'assert') {
+            switch (ast.property.name) {
+              case 'deepEqual':
+              case 'deepEquals':
+                ast.property.name = 'deepEqual'
+                break
+
+              case 'equal':
+              case 'equals':
+                ast.property.name = 'equal'
+                break
+
+              case 'strictEqual':
+              case 'strictEquals':
+                ast.property.name = 'strictEqual'
+                break
+
+              case 'throws':
+                break
+
+              default:
+                console.log('normalize::assert')
+                console.dir(ast)
+            }
+          } else if (ast.object.name === 'Test') {
+            if (ast.property.name === 'expect') {
+              ast.type = 'Identifier'
+              ast.name = 'assert'
+              ast.end = ast.property.end
+              delete ast.computed
+              delete ast.object
+              delete ast.optional
+              delete ast.property
+            } else if (/assert_?(deep|strict)?_?equals?/i.test(ast.property.name)) {
+              ast.object.name = 'assert'
+              const name = to.camelCase(ast.property.name.slice(6))
+              ast.property.name = /^equals?$/i.test(name) ? 'strictEqual' : name
+              normalize(ast)
+            }
+          } else {
+            normalize(ast.object)
+            normalize(ast.property)
+          }
+          break
+
+        case 'ObjectExpression':
+          ast.properties.forEach(normalize)
+          break
+
+        case 'Property':
+          normalize(ast.key)
+          normalize(ast.value)
+          break
+
+        case 'VariableDeclaration':
+          ast.declarations.forEach(normalize)
+          break
+
+        case 'VariableDeclarator':
+          normalize(ast.id)
+          normalize(ast.init)
+          break
+
+        default:
+        // console.warn('normalize::Unimplemented:' + ast.type)
+        // console.dir(ast)
+        case 'Literal':
+      }
+      return ast
+    }
+
+    const preamble = {
+      'Common Lisp': '(in-package #:cl-user)\n(defpackage #:challenge/tests/solution\n(:use #:cl #:rove #:challenge/solution))\n(in-package #:challenge/tests/solution)\n(defun displayln (s) (prin1 s) (terpri))\n\n',
+      JavaScript: "const assert = require('chai').assert\n\n",
+      Julia: 'using FactCheck\n\n',
+      Lua: 'local SOLUTION = require "solution"\n\n',
+      Racket: ''
+    }
+
+    /**
+     * @param {string} input 
+     * @param {object|string} [options] or `options.outputLanguage`
+     * @param {string} [options.outputLanguage='JavaScript'] 'JavaScript' by default
+     * @param {string} [options.showPreamble=false] 'false' by default
+     * @returns {string}
+     */
+    function convert(input, options) {
+      const {
+        inputLanguage = 'JavaScript',
+        outputLanguage = 'JavaScript',
+        showPreamble = false,
+      } = typeof (options) === 'object' ? options : { outputLanguage: options }
+      return (showPreamble ? preamble[outputLanguage] : '') +
+        to[outputLanguage](normalize(from[inputLanguage](input)))
+    }
 
   </script>
 </body>
