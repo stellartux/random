@@ -76,11 +76,11 @@ const generics = {
   ExpressionStatement({ expression }, i) {
     return this.indent(i) + this.toCode(expression, i)
   },
-  FunctionDeclaration({ body, id, params }, i) {
-    return `${this.indent(i)}${this.functionDeclarationKeyword} ${this.CallExpression({ callee: id || { type: 'Identifier', name: '' }, arguments: params })}${this.BlockStatement(body, i, this.halfBlockOpener)}\n`
+  FunctionDeclaration({ body, id, params }, i, keyword = id ? this.functionKeyword : this.lambdaKeyword) {
+    return `${keyword} ${id ? this.CallExpression({ id: id || { type: 'Identifier', name: '', raw: '' }, arguments: params }) : `(${this.list(params)})`}${this.BlockStatement(body, i, this.halfBlockOpener)}${id ? '\n' : ''}`
   },
   elseKeyword: ' else',
-  functionDeclarationKeyword: 'function',
+  functionKeyword: 'function',
   FunctionExpression(ast, i) {
     return this.FunctionDeclaration(ast, i)
   },
@@ -98,6 +98,7 @@ const generics = {
       (alternate ? this.elseKeyword + this.toCode(alternate, i) : '')
   },
   ifKeyword: 'if ',
+  lambdaKeyword: 'function',
   thenKeyword: '',
   isQuoteable(ast) {
     if (ast.type === 'Literal' || ast.type === 'Identifier') {
@@ -117,6 +118,8 @@ const generics = {
   Literal({ raw, value }) {
     if (typeof value === 'boolean') {
       return value ? this.boolTrue : this.boolFalse
+    } else if (typeof value === 'string') {
+      return `"${raw.slice(1, -1)}"`
     } else {
       return raw
     }
@@ -260,6 +263,7 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
   IfStatement(ast, i) {
     return this.indent(i) + this.ConditionalExpression(ast, i + 1)
   },
+  lambdaKeyword: '(lambda',
   list(list, i) {
     return generics.list.call(this, list, i, ' ')
   },
@@ -327,11 +331,15 @@ const CommonLisp = {
         ...ast.arguments.map((x) => this.toCode(x, i))
       ].join(' ') + ')'
     } else if (ast.callee.name === 'describe') {
-      return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}\n${this.toCode(ast.arguments[1].body, i + 1)})`
+      return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}${this.toCode(ast.arguments[1].body, i)})`
     } else if (ast.callee.name === 'it') {
-      return `(testing ${this.toCode(ast.arguments[0])}\n${this.toCode(ast.arguments[1].body, i + 1)}`
+      return `(testing ${this.toCode(ast.arguments[0])}${this.toCode(ast.arguments[1].body, i, '')}`
     } else {
-      return '(' + [this.toCode(ast.callee, i), ...ast.arguments.map((x) => this.toCode(x, i + 1))].join(' ') + ')'
+      const args = [...ast.arguments]
+      if (ast.callee) {
+        args.unshift(ast.callee)
+      }
+      return '(' + this.list(args) + ')'
     }
   },
   ForStatement(ast, i) {
@@ -345,7 +353,7 @@ const CommonLisp = {
       ].join('')
     }
   },
-  functionDeclarationKeyword: '(defun',
+  functionKeyword: '(defun',
   ObjectExpression({ properties }, i) {
     return (properties.every(this.isQuoteable.bind(this)) ? "'(" : '(list ') + this.list(properties, i) + ')'
   },
@@ -391,7 +399,7 @@ const JavaScript = {
   },
   halfBlockOpener: ' {',
   FunctionExpression({ body, params }, i) {
-    return `function (${params.map((x) => this.toCode(x)).join(', ')}) ${this.toCode(body, i + 1)}`
+    return `function (${params.map((x) => this.toCode(x)).join(', ')}) ${this.toCode(body, i)}`
   },
   Identifier: ({ name }) => name[0] + toCamelCase(name.slice(1)),
   Literal(literal) {
@@ -467,7 +475,7 @@ const Julia = {
       ast.arguments.unshift(ast.callee.object)
       return `${this.toCode(ast.callee.property, i)}(${this.list(ast.arguments, i)})`
     } else if (ast.callee.name === 'describe' || ast.callee.name === 'it') {
-      return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) do${this.toCode(ast.arguments[1].body, i)}`
+      return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) ${this.toCode(ast.arguments[1].body, i, 'do')}`
     } else {
       return `${this.toCode(ast.callee, i)}(${this.list(ast.arguments, i)})`
     }
@@ -762,8 +770,8 @@ ${this.body(body.body, i)}`
     return `${this.indent(i)}for ${this.toCode(left)} in ${this.toCode(right)}:
 ${this.body(body.body, i)}`
   },
-  functionDeclarationKeyword: 'def',
-  MemberExpression(ast) {
+  functionKeyword: 'def',
+  MemberExpression(ast, i) {
     if (ast.object.name === 'console') {
       return 'print'
     } else if (ast.property.name === 'length') {
@@ -823,7 +831,7 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     }
     abandon(ast, 'Unhandled `for..of` statement')
   },
-  functionDeclarationKeyword: '(define',
+  functionKeyword: '(define',
   incrementFunction: 'add1',
   tabWidth: 1,
   toOperator(op) {
