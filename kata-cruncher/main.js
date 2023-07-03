@@ -2,6 +2,11 @@
 import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.5.2-QB1pleC5s3x1EAqjiTTI/mode=imports,min/optimized/espree.js'
 const identity = (x) => x
 
+function abandon(ast, reason = 'Something went wrong') {
+  console.dir(ast)
+  throw new Error(reason)
+}
+
 function isNumericalForStatement({ init, test, type, update }) {
   return type === 'ForStatement' &&
     init.type === 'VariableDeclaration' &&
@@ -72,7 +77,7 @@ const generics = {
     return this.indent(i) + this.toCode(expression, i)
   },
   FunctionDeclaration({ body, id, params }, i) {
-    return `${this.indent(i)}${this.functionDeclarationKeyword} ${this.CallExpression({ callee: id || { type: 'Identifier', name: '' }, arguments: params })}${this.BlockStatement(body, i, this.halfBlockOpener)}`
+    return `${this.indent(i)}${this.functionDeclarationKeyword} ${this.CallExpression({ callee: id || { type: 'Identifier', name: '' }, arguments: params })}${this.BlockStatement(body, i, this.halfBlockOpener)}\n`
   },
   elseKeyword: ' else',
   functionDeclarationKeyword: 'function',
@@ -156,8 +161,7 @@ const generics = {
     } else if (this[ast.type]) {
       return this[ast.type](ast, ...xs)
     } else {
-      console.dir(ast)
-      throw new Error('Unimplemented: ' + ast.type)
+      abandon(ast, `Unimplemented: ${ast.type}`)
     }
   },
   toOperator: identity,
@@ -223,7 +227,7 @@ const sexpr = {
   },
   BlockStatement(ast, i, ...xs) {
     if (ast.body.length === 1) {
-      return `\n${this.toCode(ast.body[0], i, ...xs)}`
+      return `\n${this.toCode(ast.body[0], i + 1, ...xs)}`
     } else {
       return generics.BlockStatement.call(this, ast, i, ...xs)
     }
@@ -486,8 +490,7 @@ const Julia = {
         this.toCode(body, i, '')
       ].join('')
     }
-    console.dir(ast)
-    throw new Error('Unimplemented: ForStatement')
+    abandon(ast, 'Unimplemented: ForStatement')
   },
   ForInStatement({ body, left, right }, i) {
     return `for ${this.toCode(left, i)} in eachindex(${this.toCode(right, i)}) ${this.toCode(body, i, '')}`
@@ -623,8 +626,7 @@ const Lua = {
         ].join('')
       }
     }
-    console.dir(ast)
-    console.warn(`ForStatement: ${type}`)
+    abandon(ast, `ForStatement: ${type}`)
   },
   ForOfStatement({ body, left, right }, i) {
     const id = left.declarations[0].id
@@ -726,18 +728,16 @@ const Racket = {
       return `${this.indent(i)}(do ((${id} ${this.toCode(decl.init)}${update}))
 ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     } else {
-      console.dir(ast)
-      throw new Error('Unimplemented: non-numerical for statement')
+      abandon(ast, 'Unimplemented: non-numerical for statement')
     }
   },
   ForOfStatement(ast, i) {
     const { left, right, body } = ast
     if (left.type === 'VariableDeclaration') {
       const decl = left.declarations[0].id
-      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? this.toCode(decl) : `(${decl.elements.map(this.toCode.bind(this)).join(' ')})` } ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
-    } 
-    console.dir(ast)
-    throw new Error('Unhandled `for..of` statement')
+      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? this.toCode(decl) : `(${decl.elements.map(this.toCode.bind(this)).join(' ')})`} ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
+    }
+    abandon(ast, 'Unhandled `for..of` statement')
   },
   functionDeclarationKeyword: '(define',
   incrementFunction: 'add1',
