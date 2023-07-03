@@ -73,6 +73,9 @@ const generics = {
   },
   conditionThen: '?',
   conditionElse: ':',
+  DebuggerStatement() {
+    console.warn('Skipping debugger statement')
+  },
   ExpressionStatement({ expression }, i) {
     return this.indent(i) + this.toCode(expression, i)
   },
@@ -388,6 +391,9 @@ const JavaScript = {
   ArrowFunctionExpression({ body, params }, i) {
     return `(${this.list(params)}) => ${this.toCode(body, i)}`
   },
+  DebuggerStatement(_, i) {
+    return `${this.indent(i)}debugger`
+  },
   ForStatement({ body, init, test, update }, i) {
     return this.indent(i) + `for (${this.toCode(init)}; ${this.toCode(test, i)}; ${this.toCode(update, i)}) ${this.toCode(body, i)}`
   },
@@ -609,6 +615,9 @@ const Lua = {
   },
   conditionThen: 'and',
   conditionElse: 'or',
+  DebuggerStatement(_, i) {
+    return `${this.indent(i)}debug.debug()`
+  },
   ForStatement(ast, i) {
     const { body, init, test, type, update } = ast
     if (isNumericalForStatement(ast)) {
@@ -827,7 +836,9 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     const { left, right, body } = ast
     if (left.type === 'VariableDeclaration') {
       const decl = left.declarations[0].id
-      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? this.toCode(decl) : `(${decl.elements.map(this.toCode.bind(this)).join(' ')})`} ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
+      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? 
+        this.toCode(decl) :
+        `(${this.list(decl.elements)})`} ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
     }
     abandon(ast, 'Unhandled `for..of` statement')
   },
@@ -873,7 +884,7 @@ function toTitleCase(str) {
   return str[0].toUpperCase() + str.slice(1).replace(/[-_ ]./g, (x) => x[1].toUpperCase())
 }
 
-export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Racket }
+export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Python, Racket }
 
 /** @type {Record<string,{(code: string) => { type: 'Program', body: {}[] }}>}*/
 export const from = {
