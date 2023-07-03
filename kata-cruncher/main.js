@@ -710,6 +710,90 @@ const Lua = {
 }
 Object.setPrototypeOf(Lua, generics)
 
+const Python = {
+  ArrowFunctionExpression({ body, params, expression }) {
+    if (expression && body.type === 'BlockStatement') {
+      console.dir(body)
+      throw new Error("Can't represent multiline arrow functions in Python.")
+    }
+    return `lambda ${this.list(params)}: ${this.toCode(body)}`
+  },
+  blockOpener: ':',
+  blockCloser: '',
+  blockClose() {
+    return ''
+  },
+  boolTrue: 'True',
+  boolFalse: 'False',
+  ConditionalExpression({ alternate, consequent, test }) {
+    let result = `${this.toCode(consequent)} if ${this.toCode(test)}`
+    if (alternate) {
+      result += ` else ${this.toCode(alternate)}`
+    }
+    return result
+  },
+  ForStatement(ast, i) {
+    if (isNumericalForStatement(ast)) {
+      const { body, init, test, update } = ast
+      let params = this.toCode(init.declarations[0].id)
+      let range = [this.toCode(init.declarations[0].init), this.toCode(test.right)]
+      if (update.type === 'UpdateExpression' && update.operator !== '++') {
+        range.push('-1')
+      } else if (update.type === 'AssignmentExpression') {
+        if (update.operator === '+=') {
+          if (update.right.value !== 1) {
+            range.push(this.toCode(update.right))
+          }
+        } else if (update.operator === '-=') {
+          range.push(`-${this.toCode(update.right)}`)
+        } else {
+          abandon(ast, 'Unhandled arithmetic progression in numerical for loop')
+        }
+      }
+      return `${this.indent(i)}for ${params} in range(${range.join(', ')}):\n${this.body(body.body, i)}`
+    }
+    abandon(ast, 'Unhandled for statement variation')
+  },
+  ForInStatement({ body, left, right }, i) {
+    return `${this.indent(i)}for ${this.toCode(left)}, _ in enumerate(${this.toCode(right)}):
+${this.body(body.body, i)}`
+  },
+  ForOfStatement({ body, left, right }, i) {
+    return `${this.indent(i)}for ${this.toCode(left)} in ${this.toCode(right)}:
+${this.body(body.body, i)}`
+  },
+  functionDeclarationKeyword: 'def',
+  MemberExpression(ast) {
+    if (ast.object.name === 'console') {
+      return 'print'
+    } else if (ast.property.name === 'length') {
+      return `len(${this.toCode(ast.object)})`
+    } else {
+      return generics.MemberExpression.call(this, ast, i)
+    }
+  },
+  NewExpression(ast, i) {
+    return this.CallExpression(ast, i)
+  },
+  tabWidth: 4,
+  toOperator(op) {
+    switch (op) {
+      case '!': return 'not '
+      case '&&': return 'and'
+      case '||': return 'or'
+      case '===': return '=='
+      case '!==': return '!='
+      case '>>>':
+        console.warn('Converting unsigned right bitshift to signed')
+        return '>>'
+      default: return op
+    }
+  },
+  undefined: 'nil',
+  UpdateExpression: Julia.UpdateExpression
+}
+Object.setPrototypeOf(Python, generics)
+
 const Racket = {
   assignmentKeyword: 'set!',
   boolTrue: '#t',
