@@ -714,7 +714,7 @@ const Lua = {
   NewExpression(ast, i) {
     if (ast.callee.name === 'Error') {
       return this.list(ast.arguments, i)
-    } 
+    }
     return `${this.toCode(ast.callee, i)}:new(${this.list(ast.arguments, i)})`
   },
   Property({ key, value }, i) {
@@ -746,6 +746,31 @@ const Lua = {
       case '<': case '>': case '<=': case '>=':
         return op
     }
+  },
+  TryStatement({ block, handler, finalizer }, i) {
+    const offset = handler?.param ? 1 : 0
+    const pcall = `pcall(function ()${this.toCode(block, i + offset)})`
+    if (!finalizer && handler.body.body.length === 0) {
+      return pcall
+    }
+    let result = ''
+    if (handler) {
+      if (handler.param) {
+        const success = `_try_catch_${i + offset}`
+        result += `do\n${this.indent(i + 1)}local ${success}, ${this.toCode(handler.param)} = ${pcall}
+${this.indent(i + offset)}if not ${success}`
+      } else {
+        result += `if not ${pcall}`
+      }
+      result += ` then${this.toCode(handler.body, i + offset)}\n`
+    }
+    if (finalizer) {
+      result += `${this.body(finalizer.body, i)}\n`
+    }
+    if (offset) {
+      result += `${this.indent(i)}end`
+    }
+    return result
   },
   undefined: 'nil',
   UnaryExpression(ast) {
@@ -922,6 +947,22 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
   },
   undefined: '#f',
   variableDeclarationKeyword: 'define',
+  ThrowStatement({ argument }, i) {
+    return `${this.indent(i)}(error ${this.toCode(argument, i)})`
+  },
+  TryStatement({ block, handler, finalizer }, i) {
+    let result = `(with-handlers ([exn:fail?`
+    if (handler && handler.body.body.length) {
+      result += `\n${this.indent(i+1)}(lambda (${handler.param ? this.toCode(handler.param) : ''}) ${handler.body.body.length > 0 ? this.toCode(handler.body, i + 1) : '#<void>'})])`
+    } else {
+      result += ' void])'
+    }
+    result += this.toCode(block, i) + ')\n'
+    if (finalizer) {
+      result += this.body(finalizer.body, i - 1, '')
+    }
+    return result
+  },
   WhileStatement({ body, test }, i) {
     return `${this.indent(i)}(do () (${this.test(test, i)})
 ${this.body(body.body, i)})`
