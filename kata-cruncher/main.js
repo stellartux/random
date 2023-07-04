@@ -161,6 +161,12 @@ const generics = {
   test(ast, i) {
     return this.toCode(ast, i)
   },
+  ThrowStatement(ast, i) {
+    if (this.throwKeyword) {
+      return `${this.indent(i)}${this.throwKeyword} ${this.toCode(ast.argument, i)}`
+    }
+    abandon(ast, 'Unimplemented: ThrowStatement')
+  },
   toCode(ast, ...xs) {
     if (!ast) {
       return this.undefined
@@ -336,7 +342,7 @@ const CommonLisp = {
     } else if (ast.callee.name === 'describe') {
       return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}${this.toCode(ast.arguments[1].body, i)})`
     } else if (ast.callee.name === 'it') {
-      return `(testing ${this.toCode(ast.arguments[0])}${this.toCode(ast.arguments[1].body, i, '')}`
+      return `($ ${this.toCode(ast.arguments[0])}${this.toCode(ast.arguments[1].body, i, '')}`
     } else {
       const args = [...ast.arguments]
       if (ast.callee) {
@@ -421,7 +427,22 @@ const JavaScript = {
     return `(${this.toCode(ast, i)})`
   },
   thenKeyword: ' {',
+  throwKeyword: 'throw',
   ThisExpression: () => 'this',
+  TryStatement({ block, handler, finalizer }, i) {
+    let result = `try ${this.toCode(block, i)}`
+    if (handler) {
+      result += ' catch '
+      if (handler.param) {
+        result += `(${this.toCode(handler.param)}) `
+      }
+      result += this.toCode(handler.body, i)
+    }
+    if (finalizer) {
+      result += ` finally ${this.toCode(finalizer, i)}`
+    }
+    return result
+  },
   UnaryExpression({ argument, operator, prefix }, i) {
     if (operator === 'typeof') {
       return `typeof ${this.toCode(argument, i)}`
@@ -555,6 +576,9 @@ const Julia = {
     return this.toCode(key, i) + ' = ' + this.toCode(value, i) + ','
   },
   tabWidth: 4,
+  ThrowStatement({ argument }, i) {
+    return `${this.indent(i)}throw(${this.toCode(argument, i)})`
+  },
   toOperator(op) {
     switch (op) {
       case '**': return '^'
@@ -562,6 +586,21 @@ const Julia = {
       case '===': return '=='
       default: return op
     }
+  },
+  TryStatement({ block, handler, finalizer }, i) {
+    let result = `try ${this.toCode(block, i, '', '')}`
+    if (handler) {
+      result += '\ncatch'
+      if (handler.param) {
+        result += ` ${this.toCode(handler.param)}`
+      }
+      result += this.toCode(handler.body, i, '', '')
+    }
+    if (finalizer) {
+      result += `\nfinally ${this.toCode(finalizer, i, '', '')}`
+    }
+    result += this.blockClose(i)
+    return result
   },
   undefined: 'nothing',
   UpdateExpression({ argument, operator, prefix }, i) {
@@ -673,6 +712,9 @@ const Lua = {
     }
   },
   NewExpression(ast, i) {
+    if (ast.callee.name === 'Error') {
+      return this.list(ast.arguments, i)
+    } 
     return `${this.toCode(ast.callee, i)}:new(${this.list(ast.arguments, i)})`
   },
   Property({ key, value }, i) {
@@ -689,6 +731,9 @@ const Lua = {
     return `${this.toCode(ast, i)}${keyword}`
   },
   ThisExpression: () => 'self',
+  ThrowStatement({ argument }, i) {
+    return `${this.indent(i)}error(${this.toCode(argument)})`
+  },
   toOperator(op) {
     switch (op) {
       case '^': return '~'
@@ -728,10 +773,13 @@ const Lua = {
 Object.setPrototypeOf(Lua, generics)
 
 const Python = {
-  ArrowFunctionExpression({ body, params, expression }) {
-    if (expression && body.type === 'BlockStatement') {
-      console.dir(body)
-      throw new Error("Can't represent multiline arrow functions in Python.")
+  ArrowFunctionExpression({ body, params }) {
+    if (body.type === 'BlockStatement') {
+      if (body.body.length === 1 && body.body[0].type === 'ReturnStatement') {
+        body = body.body[0].argument
+      } else {
+        abandon(body, "Can't represent multiline arrow functions in Python.")
+      }
     }
     return `lambda ${this.list(params)}: ${this.toCode(body)}`
   },
@@ -790,9 +838,14 @@ ${this.body(body.body, i)}`
     }
   },
   NewExpression(ast, i) {
-    return this.CallExpression(ast, i)
+    if (ast.callee?.name === 'Error') {
+      return `Exception(${this.list(ast.arguments, i)})`
+    } else {
+      return this.CallExpression(ast, i)
+    }
   },
   tabWidth: 4,
+  throwKeyword: 'raise',
   toOperator(op) {
     switch (op) {
       case '!': return 'not '
@@ -805,6 +858,21 @@ ${this.body(body.body, i)}`
         return '>>'
       default: return op
     }
+  },
+  TryStatement({ block, handler, finalizer }, i) {
+    let result = `try${this.toCode(block, i)}`
+    if (handler) {
+      result += '\nexcept'
+      if (handler.param) {
+        result += ` ${this.toCode(handler.param)}`
+      }
+      result += this.toCode(handler.body, i)
+    }
+    if (finalizer) {
+      result += `\nfinally${this.toCode(finalizer, i)}`
+    }
+    result += this.blockClose(i)
+    return result
   },
   undefined: 'nil',
   UpdateExpression: Julia.UpdateExpression
@@ -836,7 +904,7 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     const { left, right, body } = ast
     if (left.type === 'VariableDeclaration') {
       const decl = left.declarations[0].id
-      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ? 
+      return `${this.indent(i)}(for ((${decl.type === 'Identifier' ?
         this.toCode(decl) :
         `(${this.list(decl.elements)})`} ${this.toCode(right)}))${this.toCode(body, i + 1, '')}`
     }
