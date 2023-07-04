@@ -777,7 +777,7 @@ ${this.indent(i + offset)}if not ${success}`
     if (operator === '!') {
       return 'not ' + this.toCode(ast.argument)
     } else {
-      return generics.UnaryExpression(ast)
+      return generics.UnaryExpression.call(this, ast)
     }
   },
   UpdateExpression({ argument, operator, prefix }, i) {
