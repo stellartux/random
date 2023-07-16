@@ -116,7 +116,7 @@ const generics = {
     return false
   },
   list(list, i = 0, separator = ', ') {
-    return list.map(x => this.toCode(x, i)).join(separator)
+    return list ? list.map(x => this.toCode(x, i)).join(separator) : ''
   },
   Literal({ raw, value, regex }) {
     if (regex) {
@@ -444,7 +444,7 @@ ${this.indent(i)}}
     const { key, kind, value } = ast
     let result = this.indent(i)
     if (ast.static) {
-      result = 'static '
+      result += 'static '
     }
     if (kind === 'get') {
       result += 'get '
@@ -704,24 +704,97 @@ const Lua = {
     }
   },
   CallExpression(ast, i) {
-    if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert') {
-      const args = ast.arguments.map((arg) => this.toCode(arg, i))
-      if (/^(expect(_?similar)?|(strict_?)?equals?)$/i.test(ast.callee.property.name)) {
-        [args[0], args[1]] = [args[1], args[0]]
-        return `assert.equal(${args.join(', ')})`
-      } else if (/deep_?equals?/i.test(ast.callee.property.name)) {
-        [args[0], args[1]] = [args[1], args[0]]
-        return `assert.same(${args.join(', ')})`
-      } else if (/not_?equals?/i.test(ast.callee.property.name)) {
-        [args[0], args[1]] = [args[1], args[0]]
-        return `assert.are_not.equal(${args.join(', ')})`
-      } else if (/throws?|errors?/i.test(ast.callee.property.name)) {
-        return `assert.has_error(${args.join(', ')})`
-      } else {
-        console.warn(`assert.${ast.callee.property.name}`)
+    if (ast.callee.type === 'MemberExpression') {
+      const { object, property } = ast.callee
+      if (object.name === 'assert') {
+        const args = ast.arguments.map((arg) => this.toCode(arg, i))
+        if (/^(expect(_?similar)?|(strict_?)?equals?)$/i.test(property.name)) {
+          [args[0], args[1]] = [args[1], args[0]]
+          return `assert.equal(${args.join(', ')})`
+        } else if (/deep_?equals?/i.test(property.name)) {
+          [args[0], args[1]] = [args[1], args[0]]
+          return `assert.same(${args.join(', ')})`
+        } else if (/not_?equals?/i.test(property.name)) {
+          [args[0], args[1]] = [args[1], args[0]]
+          return `assert.are_not.equal(${args.join(', ')})`
+        } else if (/throws?|errors?/i.test(property.name)) {
+          return `assert.has_error(${args.join(', ')})`
+        } else {
+          console.warn(`assert.${property.name}`)
+        }
+      } else if (property.name === 'toString') {
+        return `tostring(${object.name})`
       }
     }
     return generics.CallExpression.call(this, ast, i)
+  },
+  ClassDeclaration({ body, id, superClass }, i) {
+    const name = this.toCode(id)
+    const methods = body.body.filter((expr) => expr.type === 'MethodDefinition')
+    const properties = body.body.filter((expr) => expr.type === 'PropertyDefinition')
+    const constructor = methods.find((method) => method.kind === 'constructor')
+    let result = `${this.indent(i)}local ${name} = {\n`
+    if (!constructor) {
+      for (const prop of properties) {
+        if (prop.value) {
+          result += `${this.indent(i + 1)}${this.toCode(prop.key)} = ${this.toCode(prop.value)},\n`
+        }
+      }
+    }
+    result += `${this.indent(i + 1)}__name = "${name}"\n${this.indent(i)}}\n`
+    if (superClass) {
+      result += `setmetatable(${name}, ${this.toCode(superClass)})\n`
+    }
+    result += `\n${this.indent(i)}function ${name}:new(`
+    if (constructor) {
+      result += `${this.list(constructor.value.params)})
+${this.indent(i + 1)}local self, superself = {}, self
+${constructor.value.body.body.map((stmt) => this.toCode(stmt, i + 1)).join('\n')}
+${this.indent(i + 1)}return setmetatable(self, superself)\n`
+    } else {
+      result += `)
+${this.indent(i + 1)}return setmetatable({}, self)\n`
+    }
+    result += this.indent(i) + 'end\n\n'
+    result += methods
+      .map((method) => this.toCode(method, i, name))
+      .filter(Boolean)
+      .join('\n')
+    if (methods.some((method) => method.kind === 'get' || method.kind === 'set')) {
+      const getters = methods.filter((method) => method.kind === 'get')
+      const setters = methods.filter((method) => method.kind === 'set')
+      if (getters.length > 0) {
+        result += `
+${this.indent(i)}function ${name}:__index(key)
+${this.indent(i + 1)}${getters.map((getter) => `if key == "${getter.key.name}" then
+${getter.value.body.body
+            .map((stmt) => this.toCode(stmt, i + 2))}`)
+            .join(`\n${this.indent(i + 1)}else`)}
+${this.indent(i + 1)}else
+${this.indent(i + 2)}return ${name}[key]
+${this.indent(i + 1)}end
+${this.indent(i)}end
+`
+      }
+      if (setters.length > 0) {
+        result += `
+${this.indent(i)}function ${name}:__newindex(key, value)
+${this.indent(i + 1)}${setters.map((setter) => {
+          let result = `if key == "${setter.key.name}" then\n`
+          if (setter.value.params[0].name !== 'value') {
+            result += `${this.indent(i + 2)}local ${setter.value.params[0].name} = value\n`
+          }
+          result += setter.value.body.body.map((stmt) => this.toCode(stmt, i + 2)).join('\n')
+          return result
+        }).join(`\n${this.indent(i)}else`)}
+${this.indent(i + 1)}end
+${this.indent(i)}end
+`
+      }
+    } else {
+      result += `\n${this.indent(i)}${name}.__index = ${name}\n`
+    }
+    return result
   },
   conditionThen: 'and',
   conditionElse: 'or',
@@ -769,8 +842,13 @@ const Lua = {
     return `for ${this.toCode(left.declarations[0].id)} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
   },
   Identifier({ name }) {
-    const keys = { Math: 'math' }
-    if (name in keys) return keys[name]
+    const keys = {
+      Math: 'math',
+      toString: 'tostring'
+    }
+    if (Object.hasOwn(keys, name)) {
+      return keys[name]
+    }
     return name[0] === name[0].toLowerCase() ? toCamelCase(name) : toTitleCase(name)
   },
   LabeledStatement({ body, label }, i) {
@@ -783,6 +861,16 @@ const Lua = {
       return '#' + this.toCode(ast.object)
     } else {
       return generics.MemberExpression.call(this, ast, i)
+    }
+  },
+  MethodDefinition(ast, i, name) {
+    const { key, kind, value } = ast
+    if (kind === 'method') {
+      let methodName = this.toCode(key)
+      if (methodName === 'tostring') {
+        methodName = '__tostring'
+      }
+      return `${this.indent(i)}function ${name}${ast.static ? '.' : ':'}${methodName}(${this.list(value.params)})${this.toCode(value.body, i)}\n`
     }
   },
   NewExpression(ast, i) {
