@@ -300,6 +300,9 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
       return `(make-${type}${ast.arguments.length ? ' ' + this.list(ast.arguments, i) : ''})`
     }
   },
+  RestElement({ argument }) {
+    return `. ${this.toCode(argument)}`
+  },
   ReturnStatement({ argument }, i) {
     return this.indent(i) + this.toCode(argument, i)
   },
@@ -374,6 +377,9 @@ const CommonLisp = {
   Property({ key, value }, i) {
     return `(${this.toCode(key, i)} . ${this.toCode(value, i)})`
   },
+  RestElement({ argument }) {
+    return `&rest ${this.toCode(argument)}`
+  },
   toOperator(op, i) {
     switch (op) {
       case '==': return 'equal'
@@ -419,6 +425,9 @@ ${this.indent(i)}}
   },
   DebuggerStatement(_, i) {
     return `${this.indent(i)}debugger`
+  },
+  ExportNamedDeclaration({ declaration }, i) {
+    return `export ${this.toCode(declaration, i)}`
   },
   ForStatement({ body, init, test, update }, i) {
     return this.indent(i) + `for (${this.toCode(init)}; ${this.toCode(test, i)}; ${this.toCode(update, i)}) ${this.toCode(body, i)}`
@@ -471,6 +480,15 @@ ${this.indent(i)}}
   },
   RegExpLiteral({ pattern, flags }) {
     return `/${pattern}/${flags}`
+  },
+  RestElement({ argument }) {
+    return `...${this.toCode(argument)}`
+  },
+  SpreadElement({ argument }) {
+    return `...${this.toCode(argument)}`
+  },
+  Super() {
+    return 'super'
   },
   test(ast, i) {
     return `(${this.toCode(ast, i)})`
@@ -638,6 +656,12 @@ const Julia = {
   },
   RegExpLiteral({ pattern, flags }) {
     return `r"${pattern.replace(/"/g, '\\"').replace(/\\\//g, '/')}"${flags}`
+  },
+  RestElement({ argument }) {
+    return `${this.toCode(argument)}...`
+  },
+  SpreadElement({ argument }) {
+    return `${this.toCode(argument)}...`
   },
   tabWidth: 4,
   ThrowStatement({ argument }, i) {
@@ -895,6 +919,15 @@ ${this.indent(i)}end
     console.info(`Converting /${pattern}/ to Lua string match pattern`)
     return `"${pattern.replace(/\\/g, '%').replace(/"/g, '\\"').replace(/\\\//g, '/')}"`
   },
+  RestElement() {
+    return '...'
+  },
+  SpreadElement({ argument }) {
+    return `table.unpack(${this.toCode(argument)})`
+  },
+  Super() {
+    return `getmetatable(self)`
+  },
   tabWidth: 4,
   test(ast, i, keyword = ' then') {
     return `${this.toCode(ast, i)}${keyword}`
@@ -1043,6 +1076,15 @@ ${this.body(body.body, i)}`
       throw new Error('Unimplemented: regexp flags')
     }
     return `r"${pattern.replace(/"/g, '\\"').replace(/\\\//g, '/')}"`
+  },
+  RestElement() {
+    return `*${this.toCode(argument)}`
+  },
+  SpreadElement({ argument }) {
+    return `*${this.toCode(argument)}`
+  },
+  Super() {
+    return 'super()'
   },
   tabWidth: 4,
   throwKeyword: 'raise',
