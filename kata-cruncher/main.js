@@ -405,6 +405,15 @@ const JavaScript = {
   BreakStatement({ label }, i) {
     return this.indent(i) + 'break' + (label ? ' ' + label.name : '')
   },
+  ClassBody({ body }, i) {
+    return `{
+${body.map((x) => this.toCode(x, i + 1)).join('\n')}
+${this.indent(i)}}
+`
+  },
+  ClassDeclaration({ body, id, superClass }, i) {
+    return `class ${this.toCode(id)}${superClass ? ` extends ${this.toCode(superClass)}` : ''} ${this.toCode(body, i)}`
+  },
   ContinueStatement({ label }, i) {
     return this.indent(i) + 'continue' + (label ? ' ' + label.name : '')
   },
@@ -431,8 +440,34 @@ const JavaScript = {
     }
     return generics.Literal.call(this, literal)
   },
+  MethodDefinition(ast, i) {
+    const { key, kind, value } = ast
+    let result = this.indent(i)
+    if (ast.static) {
+      result = 'static '
+    }
+    if (kind === 'get') {
+      result += 'get '
+    } else if (kind === 'set') {
+      result += 'set '
+    }
+    result += `${this.toCode(key)}(${value.params.map(this.toCode.bind(this)).join(', ')}) ${this.toCode(value.body, i)}`
+    return result
+  },
   NewExpression(ast, i) {
     return `new ${toTitleCase(this.toCode(ast.callee, i))}(${this.list(ast.arguments, i)})`
+  },
+  PropertyDefinition(ast, i) {
+    const { key, value } = ast
+    let result = this.indent(i)
+    if (ast.static) {
+      result = 'static '
+    }
+    result += this.toCode(key)
+    if (value) {
+      result += ' = ' + this.toCode(value)
+    }
+    return result
   },
   RegExpLiteral({ pattern, flags }) {
     return `/${pattern}/${flags}`
