@@ -1,10 +1,19 @@
 // import { parse } from 'https://cdn.skypack.dev/espree@9.5.2'
 import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.5.2-QB1pleC5s3x1EAqjiTTI/mode=imports,min/optimized/espree.js'
+
 const identity = (x) => x
 
 function abandon(ast, reason = 'Something went wrong') {
   console.dir(ast)
   throw new Error(reason)
+}
+
+function isIteratorInitializer({ computed, key, type }) {
+  return type === 'MethodDefinition'
+    && computed
+    && key.type === 'MemberExpression'
+    && key.object.name === 'Symbol'
+    && key.property.name === 'Iterator'
 }
 
 function isNumericalForStatement({ init, test, type, update }) {
@@ -22,6 +31,33 @@ function isNumericalForStatement({ init, test, type, update }) {
       || update.type === 'AssignmentExpression' && update.left.name === init.declarations[0].id.name
     )
 }
+
+/** Given an expression, returns an expression representing its logical inverse. */
+function not(ast) {
+  const { argument, operator, type, value } = ast
+  if (type === 'UnaryExpression' && argument.type === 'UnaryExpression' && argument.operator === '!') {
+    return argument
+  } else if (type === 'BinaryExpression' && '!==='.includes(operator)) {
+    return {
+      ...ast,
+      operator: (operator[0] === '!' ? '=' : '!') + operator.slice(1)
+    }
+  } else if (type === 'Literal' && typeof value === 'boolean') {
+    return {
+      type: 'Literal',
+      raw: value ? 'false' : 'true',
+      value: !value
+    }
+  } else {
+    return {
+      type: 'UnaryExpression',
+      operator: '!',
+      argument: ast
+    }
+  }
+}
+
+// see https://github.com/estree/estree/tree/master
 
 const generics = {
   ArrayExpression({ elements }) {
@@ -52,8 +88,8 @@ const generics = {
     }
     return result.join(' ')
   },
-  body(body, i = 0) {
-    return body.map((stmt) => this.toCode(stmt, i + 1)).join('\n')
+  body(body, i = 0, ...xs) {
+    return body.map((stmt) => this.toCode(stmt, i + 1, ...xs)).join('\n')
   },
   BlockStatement({ body }, i, opener = this.blockOpener, closer = this.blockClose(i)) {
     return opener + '\n' + this.body(body, i) + closer
@@ -521,10 +557,8 @@ ${this.indent(i)}}
     return result
   },
   UnaryExpression({ argument, operator, prefix }, i) {
-    if (operator === 'typeof') {
-      return `typeof ${this.toCode(argument, i)}`
-    } else if (prefix) {
-      return operator + this.toCode(argument, i)
+    if (prefix) {
+      return operator + (/\w$/.test(operator) ? ' ' : '') + this.toCode(argument, i)
     } else {
       return this.toCode(argument, i) + operator
     }
@@ -589,8 +623,8 @@ const Julia = {
   },
   ClassDeclaration({ body, id, superClass }, i) {
     const name = this.toCode(id)
-    const methods = body.body.filter((stmt) => stmt.type === 'MethodDefinition')
-    const properties = body.body.filter((stmt) => stmt.type === 'PropertyDefinition')
+    const methods = body.body.filter(({ type }) => type === 'MethodDefinition')
+    const properties = body.body.filter(({ type }) => type === 'PropertyDefinition')
     let result = `${this.indent(i)}struct ${name}`
     if (superClass) {
       result += ` <: ${this.toCode(superClass)}`
@@ -812,8 +846,8 @@ ${this.indent(i)}end\n`
 Object.setPrototypeOf(Julia, generics)
 
 const Lua = {
-  ArrayExpression(ast, i) {
-    return `{ ${this.list(ast.elements, i)} }`
+  ArrayExpression({ elements }, i) {
+    return `{ ${this.list(elements, i)} }`
   },
   AssignmentExpression({ id, left, operator, right }, i) {
     const lhs = this.toCode(left ?? id, i)
@@ -879,9 +913,9 @@ const Lua = {
     result += `\n${this.indent(i)}function ${name}:new(`
     if (constructor) {
       result += `${this.list(constructor.value.params)})
-${this.indent(i + 1)}local self, superself = {}, self
+${this.indent(i + 1)}local self, super = {}, self
 ${constructor.value.body.body.map((stmt) => this.toCode(stmt, i + 1)).join('\n')}
-${this.indent(i + 1)}return setmetatable(self, superself)\n`
+${this.indent(i + 1)}return setmetatable(self, super)\n`
     } else {
       result += `)
 ${this.indent(i + 1)}return setmetatable({}, self)\n`
@@ -891,7 +925,7 @@ ${this.indent(i + 1)}return setmetatable({}, self)\n`
       .map((method) => this.toCode(method, i, name))
       .filter(Boolean)
       .join('\n')
-    if (methods.some((method) => method.kind === 'get' || method.kind === 'set')) {
+    if (methods.some(({ kind }) => kind === 'get' || kind === 'set')) {
       const getters = methods.filter(({ kind }) => kind === 'get')
       const setters = methods.filter(({ kind }) => kind === 'set')
       if (getters.length > 0) {
@@ -933,19 +967,9 @@ ${this.indent(i)}end
     return `${this.indent(i)}debug.debug()`
   },
   DoWhileStatement({ body, test }, i) {
-    const { argument, operator } = test
-    let result = `${this.indent(i)}repeat
-${body.body.map((stmt) => this.toCode(stmt, i + 1) + '\n')}${this.indent(i)}until `
-    if (operator === '!') {
-      result += this.toCode(argument, i)
-    } else if (operator === '==' || operator === '===') {
-      result += this.toCode({ ...test, operator: '!' + operator.slice(1) }, i)
-    } else if (operator === '!=' || operator === '!==') {
-      result += this.toCode({ ...test, operator: '=' + operator.slice(1) }, i)
-    } else {
-      result += this.toCode({ type: 'UnaryExpression', operator: '!', argument: test }, i)
-    }
-    return result
+    return `${this.indent(i)}repeat
+${this.body(body.body, i)}
+${this.indent(i)}until ${this.toCode(not(test), i)}`
   },
   ForStatement(ast, i) {
     const { body, init, test, type, update } = ast
@@ -1139,9 +1163,10 @@ const Python = {
   },
   boolTrue: 'True',
   boolFalse: 'False',
-  ClassDeclaration({ body, id, superClass }, i) {
+  ClassDeclaration(ast, i) {
+    const { body, id, superClass } = ast
     return `${this.indent(i)}class ${this.toCode(id)}${superClass ? `(${this.toCode(superClass)})` : ''}:
-${body.body.map((stmt) => this.toCode(stmt, i + 1)).join('\n')}\n\n`
+${this.body(body.body, i, ast)}\n\n`
   },
   ConditionalExpression({ alternate, consequent, test }) {
     let result = `${this.toCode(consequent)} if ${this.toCode(test)}`
@@ -1192,9 +1217,10 @@ ${this.body(body.body, i)}`
       return generics.MemberExpression.call(this, ast, i)
     }
   },
-  MethodDefinition(ast, i) {
+  MethodDefinition(ast, i, { body }) {
     const { computed, key, kind, value } = ast
     let result = `\n${this.indent(i)}`
+    const params = [...value.params]
     let name = this.toCode(key)
     if (name === 'constructor') {
       name = '__init__'
@@ -1202,10 +1228,22 @@ ${this.body(body.body, i)}`
       name = '__len__'
     } else if (name === 'toString') {
       name = '__str__'
+    } else if (name === 'next' && body.body.some(isIteratorInitializer)) {
+      result += `def __next__(self, *xs):
+${this.indent(i + 1)}result = self.next(*xs)
+${this.indent(i + 1)}if result != None:
+${this.indent(i + 2)}return result.value
+${this.indent(i + 1)}else:
+${this.indent(i + 2)}raise StopIteration
+
+${this.indent(i)}`
     } else if (computed) {
-      name = toSnakeCase(name).slice(1, -1)
+      if (isIteratorInitializer(ast)) {
+        name = '__iter__'
+      } else {
+        name = toSnakeCase(name).slice(1, -1)
+      }
     }
-    const params = [...value.params]
     if (ast.static) {
       result += `@staticmethod\n${this.indent(i)}`
     } else {
@@ -1264,6 +1302,7 @@ ${this.body(body.body, i)}`
   throwKeyword: 'raise',
   toOperator(op) {
     switch (op) {
+      case 'delete': return 'del'
       case '!': return 'not '
       case '&&': return 'and'
       case '||': return 'or'
