@@ -426,6 +426,9 @@ ${this.indent(i)}}
   DebuggerStatement(_, i) {
     return `${this.indent(i)}debugger`
   },
+  DoWhileStatement({ body, test }, i) {
+    return `${this.indent(i)}do ${this.toCode(body, i)} while ${this.test(test)}`
+  },
   ExportNamedDeclaration({ declaration }, i) {
     return `export ${this.toCode(declaration, i)}`
   },
@@ -450,7 +453,7 @@ ${this.indent(i)}}
     return generics.Literal.call(this, literal)
   },
   MethodDefinition(ast, i) {
-    const { key, kind, value } = ast
+    const { computed, key, kind, value } = ast
     let result = this.indent(i)
     if (ast.static) {
       result += 'static '
@@ -460,7 +463,14 @@ ${this.indent(i)}}
     } else if (kind === 'set') {
       result += 'set '
     }
-    result += `${this.toCode(key)}(${value.params.map(this.toCode.bind(this)).join(', ')}) ${this.toCode(value.body, i)}`
+    if (computed) {
+      result += '['
+    }
+    result += this.toCode(key)
+    if (computed) {
+      result += ']'
+    }
+    result += `(${value.params.map(this.toCode.bind(this)).join(', ')}) ${this.toCode(value.body, i)}`
     return result
   },
   NewExpression(ast, i) {
@@ -882,15 +892,13 @@ ${this.indent(i + 1)}return setmetatable({}, self)\n`
       .filter(Boolean)
       .join('\n')
     if (methods.some((method) => method.kind === 'get' || method.kind === 'set')) {
-      const getters = methods.filter((method) => method.kind === 'get')
-      const setters = methods.filter((method) => method.kind === 'set')
+      const getters = methods.filter(({ kind }) => kind === 'get')
+      const setters = methods.filter(({ kind }) => kind === 'set')
       if (getters.length > 0) {
         result += `
 ${this.indent(i)}function ${name}:__index(key)
-${this.indent(i + 1)}${getters.map((getter) => `if key == "${getter.key.name}" then
-${getter.value.body.body
-            .map((stmt) => this.toCode(stmt, i + 2))}`)
-            .join(`\n${this.indent(i + 1)}else`)}
+${this.indent(i + 1)}${getters.map(({ computed, key, value }) => `if key == ${computed ? this.toCode(key) : `"${key.name}"`} then
+${value.body.body.map((stmt) => this.toCode(stmt, i + 2))}`).join(`\n${this.indent(i + 1)}else`)}
 ${this.indent(i + 1)}else
 ${this.indent(i + 2)}return ${name}[key]
 ${this.indent(i + 1)}end
@@ -907,7 +915,9 @@ ${this.indent(i + 1)}${setters.map((setter) => {
           }
           result += setter.value.body.body.map((stmt) => this.toCode(stmt, i + 2)).join('\n')
           return result
-        }).join(`\n${this.indent(i)}else`)}
+        }).join(`\n${this.indent(i + 1)}else`)}
+${this.indent(i + 1)}else
+${this.indent(i + 2)}rawset(self,key, value)
 ${this.indent(i + 1)}end
 ${this.indent(i)}end
 `
@@ -921,6 +931,21 @@ ${this.indent(i)}end
   conditionElse: 'or',
   DebuggerStatement(_, i) {
     return `${this.indent(i)}debug.debug()`
+  },
+  DoWhileStatement({ body, test }, i) {
+    const { argument, operator } = test
+    let result = `${this.indent(i)}repeat
+${body.body.map((stmt) => this.toCode(stmt, i + 1) + '\n')}${this.indent(i)}until `
+    if (operator === '!') {
+      result += this.toCode(argument, i)
+    } else if (operator === '==' || operator === '===') {
+      result += this.toCode({ ...test, operator: '!' + operator.slice(1) }, i)
+    } else if (operator === '!=' || operator === '!==') {
+      result += this.toCode({ ...test, operator: '=' + operator.slice(1) }, i)
+    } else {
+      result += this.toCode({ type: 'UnaryExpression', operator: '!', argument: test }, i)
+    }
+    return result
   },
   ForStatement(ast, i) {
     const { body, init, test, type, update } = ast
@@ -1073,8 +1098,8 @@ ${this.indent(i + offset)}if not ${success}`
   },
   undefined: 'nil',
   UnaryExpression(ast) {
-    if (operator === '!') {
-      return 'not ' + this.toCode(ast.argument)
+    if (ast.operator === '!') {
+      return `not ${ast.argument.type === 'BinaryExpression' ? '(' : ''}${this.toCode(ast.argument)}${ast.argument.type === 'BinaryExpression' ? ')' : ''}`
     } else {
       return generics.UnaryExpression.call(this, ast)
     }
@@ -1168,7 +1193,7 @@ ${this.body(body.body, i)}`
     }
   },
   MethodDefinition(ast, i) {
-    const { key, kind, value } = ast
+    const { computed, key, kind, value } = ast
     let result = `\n${this.indent(i)}`
     let name = this.toCode(key)
     if (name === 'constructor') {
@@ -1177,6 +1202,8 @@ ${this.body(body.body, i)}`
       name = '__len__'
     } else if (name === 'toString') {
       name = '__str__'
+    } else if (computed) {
+      name = toSnakeCase(name).slice(1, -1)
     }
     const params = [...value.params]
     if (ast.static) {
@@ -1272,6 +1299,9 @@ const Racket = {
   assignmentKeyword: 'set!',
   boolTrue: '#t',
   boolFalse: '#f',
+  // ClassDeclaration(ast, i) {
+  // TODO https://docs.racket-lang.org/reference/createclass.html
+  //},
   decrementFunction: 'sub1',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
@@ -1342,7 +1372,7 @@ Object.setPrototypeOf(Racket, sexpr)
 
 /** @param {string} str */
 function toCamelCase(str) {
-  return (str[0] || '').toLowerCase() + str.slice(1).replace(/[-_ ]./g, (x) => x[1].toUpperCase())
+  return (str[0] || '').toLowerCase() + str.slice(1).replace(/\W+./g, (x) => x.slice(-1).toUpperCase())
 }
 
 /** @param {string} str */
@@ -1350,17 +1380,17 @@ function toKebabCase(str) {
   return (str[0].toLowerCase() + str.slice(1))
     .trim(/[_ ]+/)
     .replace(/[A-Z]/g, c => '-' + c.toLowerCase())
-    .replace(/[ _-]+/g, '-') || '_'
+    .replace(/\W/g, '-') || '_'
 }
 
 /** @param {string} str */
 function toSnakeCase(str) {
-  return str.replace(/[A-Z]/g, (x) => '_' + x.toLowerCase()).replace(/[- _]+/g, '_')
+  return str.replace(/[A-Z]/g, (x) => '_' + x.toLowerCase()).replace(/[^\w_]/g, '_')
 }
 
 /** @param {string} str */
 function toTitleCase(str) {
-  return str[0].toUpperCase() + str.slice(1).replace(/[-_ ]./g, (x) => x[1].toUpperCase())
+  return str[0].toUpperCase() + str.slice(1).replace(/\W./g, (x) => x[1].toUpperCase())
 }
 
 export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Python, Racket }
