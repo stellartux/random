@@ -577,6 +577,65 @@ const Julia = {
       return `${this.toCode(ast.callee, i)}(${this.list(ast.arguments, i)})`
     }
   },
+  ClassDeclaration({ body, id, superClass }, i) {
+    const name = this.toCode(id)
+    const methods = body.body.filter((stmt) => stmt.type === 'MethodDefinition')
+    const properties = body.body.filter((stmt) => stmt.type === 'PropertyDefinition')
+    let result = `${this.indent(i)}struct ${name}`
+    if (superClass) {
+      result += ` <: ${this.toCode(superClass)}`
+    }
+    result += '\n' + properties.map((prop) => this.toCode(prop, i + 1)).join('\n')
+    const constructor = methods.find((method) => method.kind === 'constructor')
+    if (constructor) {
+      result += `\n${this.indent(i + 1)}function ${name}(${this.list(constructor.value.params)})
+${this.indent(i + 2)}self = new()
+${constructor.value.body.body.map((stmt) => this.toCode(stmt, i + 2)).join('\n')}
+${this.indent(i + 2)}self
+${this.indent(i + 1)}end`
+    }
+    result += `\n${this.indent(i)}end\n\n`
+    result += methods
+      .map((method) => this.toCode(method, i, name))
+      .filter(Boolean)
+      .join('\n')
+    const getters = methods.filter(({ kind }) => kind === 'get')
+    const setters = methods.filter(({ kind }) => kind === 'set')
+    if (getters.length > 0) {
+      result += `\n${this.indent(i)}function Base.getproperty(self::${name}, key::Symbol)
+${this.indent(i + 1)}${getters.map(({ key, value }) => `if key == ${this.IdentifierToSymbol(key)}
+${value.body.body
+          .map((stmt) => {
+            if (stmt.type === 'ReturnStatement') {
+              return this.indent(i + 2) + this.toCode(stmt.argument)
+            } else {
+              return this.toCode(stmt, i + 2)
+            }
+          })}`)
+          .join(`\n${this.indent(i + 1)}else`)}
+${this.indent(i + 1)}else
+${this.indent(i + 2)}getfield(self, key)
+${this.indent(i + 1)}end
+${this.indent(i)}end\n`
+    }
+    if (setters.length > 0) {
+      result += `
+${this.indent(i)}function Base.setproperty!(self::${name}, key::Symbol, value)
+${this.indent(i + 1)}${setters.map(({ key, value }) => {
+        let result = `if key == ${this.IdentifierToSymbol(key)}\n`
+        if (value.params[0].name !== 'value') {
+          result += `${this.indent(i + 2)}${value.params[0].name} = value\n`
+        }
+        result += value.body.body.map((stmt) => this.toCode(stmt, i + 2)).join('\n')
+        return result
+      }).join(`\n${this.indent(i + 1)}else`)}
+${this.indent(i + 1)}else
+${this.indent(i + 2)}setfield!(self, key, value)
+${this.indent(i + 1)}end
+${this.indent(i)}end\n`
+    }
+    return result
+  },
   ContinueStatement({ label }, i) {
     if (label) {
       throw new Error('Labeled continue not supported in Julia')
@@ -629,6 +688,13 @@ const Julia = {
         return name[0] === name[0].toLowerCase() ? name.toLowerCase() : toTitleCase(name)
     }
   },
+  IdentifierToSymbol({ name, type, raw }) {
+    if (type === 'Literal') {
+      return `Symbol(${raw})`
+    } else {
+      return `:${name}`
+    }
+  },
   LabeledStatement({ label, body }, i) {
     return `${this.toCode(body, i)}\n${this.indent(i)}@label ${label.name}`
   },
@@ -639,20 +705,48 @@ const Julia = {
       return generics.MemberExpression.call(this, ast, i)
     }
   },
+  MethodDefinition(ast, i, type = 'Any') {
+    if (ast.kind === 'method') {
+      const { key, value } = ast
+      let name = this.toCode(key)
+      let result = `${this.indent(i)}function `
+      if (name === 'tostring') {
+        result += `Base.print(io::IO, self::${type})\n`
+        for (const stmt of value.body.body) {
+          if (stmt.type === 'ReturnStatement') {
+            result += `${this.indent(i + 1)}print(io, ${this.toCode(stmt.argument)})\n`
+          } else {
+            result += this.toCode(stmt, i + 1)
+          }
+        }
+        result += `${this.indent(i)}end\n`
+      } else {
+        const params = [...value.params.map(this.toCode.bind(this))]
+        if (!ast.static) {
+          params.unshift(`self::${type}`)
+        }
+        result += `${name}(${params.join(', ')})${this.toCode(value.body, i, "")}\n`
+      }
+      return result
+    }
+  },
   NewExpression(ast, i) {
     return `${toTitleCase(this.toCode(ast.callee, i))}(${this.list(ast.arguments, i)})`
   },
   ObjectExpression({ properties }, i) {
-    const props = properties.map((prop) => this.property(prop, i))
+    const props = properties.map((prop) => this.Property(prop, i))
     if (props.length < 4) {
-      return `(${props.join(' ')})`
+      return `(${props.join(', ')})`
     } else {
       const ind = this.indent(i + 1)
       return '(\n' + ind + props.join(',\n' + ind) + ')\n' + this.indent(i)
     }
   },
-  property({ key, value }, i) {
-    return this.toCode(key, i) + ' = ' + this.toCode(value, i) + ','
+  Property({ key, value }, i) {
+    return this.toCode(key, i) + ' = ' + this.toCode(value, i)
+  },
+  PropertyDefinition({ key }, i) {
+    return this.indent(i) + this.toCode(key, i)
   },
   RegExpLiteral({ pattern, flags }) {
     return `r"${pattern.replace(/"/g, '\\"').replace(/\\\//g, '/')}"${flags}`
@@ -664,6 +758,9 @@ const Julia = {
     return `${this.toCode(argument)}...`
   },
   tabWidth: 4,
+  ThisExpression() {
+    return 'self'
+  },
   ThrowStatement({ argument }, i) {
     return `${this.indent(i)}throw(${this.toCode(argument, i)})`
   },
@@ -1017,6 +1114,10 @@ const Python = {
   },
   boolTrue: 'True',
   boolFalse: 'False',
+  ClassDeclaration({ body, id, superClass }, i) {
+    return `${this.indent(i)}class ${this.toCode(id)}${superClass ? `(${this.toCode(superClass)})` : ''}:
+${body.body.map((stmt) => this.toCode(stmt, i + 1)).join('\n')}\n\n`
+  },
   ConditionalExpression({ alternate, consequent, test }) {
     let result = `${this.toCode(consequent)} if ${this.toCode(test)}`
     if (alternate) {
@@ -1060,9 +1161,36 @@ ${this.body(body.body, i)}`
       return 'print'
     } else if (ast.property.name === 'length') {
       return `len(${this.toCode(ast.object)})`
+    } else if (ast.property.name === 'toString') {
+      return `str(${this.toCode(ast.object)})`
     } else {
       return generics.MemberExpression.call(this, ast, i)
     }
+  },
+  MethodDefinition(ast, i) {
+    const { key, kind, value } = ast
+    let result = `\n${this.indent(i)}`
+    let name = this.toCode(key)
+    if (name === 'constructor') {
+      name = '__init__'
+    } else if (name === 'length') {
+      name = '__len__'
+    } else if (name === 'toString') {
+      name = '__str__'
+    }
+    const params = [...value.params]
+    if (ast.static) {
+      result += `@staticmethod\n${this.indent(i)}`
+    } else {
+      params.unshift({ type: 'ThisExpression' })
+    }
+    if (kind === 'get') {
+      result += `@property\n${this.indent(i)}`
+    } else if (kind === 'set') {
+      result += `@${name}.setter\n${this.indent(i)}`
+    }
+    result += `def ${name}(${this.list(params)})${this.toCode(value.body, i)}`
+    return result
   },
   NewExpression(ast, i) {
     if (ast.callee?.name === 'Error') {
@@ -1070,6 +1198,22 @@ ${this.body(body.body, i)}`
     } else {
       return this.CallExpression(ast, i)
     }
+  },
+  Property({ key, value }, i) {
+    let keyStr = this.toCode(key, i)
+    if (!Number.isNaN(+keyStr)) {
+      keyStr = `[${keyStr}]`
+    } else if (!/[a-zA-Z_][\w_]*/.test(keyStr)) {
+      keyStr = `["${keyStr}"]`
+    }
+    if (value) {
+      return keyStr + ' = ' + this.toCode(value, i)
+    } else {
+      return keyStr
+    }
+  },
+  PropertyDefinition(ast, i) {
+    return this.indent(i) + this.Property(ast, i)
   },
   RegExpLiteral({ pattern, flags }) {
     if (flags) {
@@ -1085,6 +1229,9 @@ ${this.body(body.body, i)}`
   },
   Super() {
     return 'super()'
+  },
+  ThisExpression() {
+    return 'self'
   },
   tabWidth: 4,
   throwKeyword: 'raise',
