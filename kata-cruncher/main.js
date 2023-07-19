@@ -342,6 +342,9 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
   ReturnStatement({ argument }, i) {
     return this.indent(i) + this.toCode(argument, i)
   },
+  SequenceExpression({ expressions }, i) {
+    return `(begin ${expressions.map((expr) => this.toCode(expr, i)).join(' ')})`
+  },
   tabWidth: 1,
   UpdateExpression({ argument, operator }, i) {
     const id = this.toCode(argument)
@@ -529,6 +532,9 @@ ${this.indent(i)}}
   },
   RestElement({ argument }) {
     return `...${this.toCode(argument)}`
+  },
+  SequenceExpression({ expressions }, i) {
+    return this.list(expressions, i)
   },
   SpreadElement({ argument }) {
     return `...${this.toCode(argument)}`
@@ -797,6 +803,9 @@ ${this.indent(i)}end\n`
   },
   RestElement({ argument }) {
     return `${this.toCode(argument)}...`
+  },
+  SequenceExpression({ expressions }, i) {
+    return `begin ${expressions.map(this.toCode.bind(this)).join('; ')} end`
   },
   SpreadElement({ argument }) {
     return `${this.toCode(argument)}...`
@@ -1288,6 +1297,9 @@ ${this.indent(i)}`
   },
   RestElement() {
     return `*${this.toCode(argument)}`
+  },
+  SequenceExpression(ast, i) {
+    return JavaScript.SequenceExpression.call(this, ast, i)
   },
   SpreadElement({ argument }) {
     return `*${this.toCode(argument)}`
