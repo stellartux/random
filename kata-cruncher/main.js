@@ -3,9 +3,11 @@ import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.5.2-QB1pleC5s3x1EAq
 
 const identity = (x) => x
 
+export class AbandonError extends Error {}
+
 function abandon(ast, reason = 'Something went wrong') {
   console.dir(ast)
-  throw new Error(reason)
+  throw new AbandonError(reason)
 }
 
 function isIteratorInitializer({ computed, key, type }) {

@@ -80,7 +80,7 @@ describe("the function", function(){
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
-    import { from, to } from './main.js'
+    import { AbandonError, from, to } from './main.js'
 
     /** @type {HTMLTextAreaElement} */
     const input = document.getElementById('input')
@@ -113,18 +113,23 @@ describe("the function", function(){
 
     function convertCode() {
       try {
+        input.setCustomValidity('')
+        output.setCustomValidity('')
         output.value = convert(input.value, {
           inputLanguage: inputLanguage.value,
           outputLanguage: outputLanguage.value,
           showPreamble: showPreamble.checked
         })
-        input.setCustomValidity('')
         return output.value
       } catch (error) {
-        input.setCustomValidity('invalid')
-        if (error.message.startsWith('Unimplemented: ')) {
+        if (error instanceof AbandonError) {
           console.error(error.message)
+          output.setCustomValidity('invalid')
+        } else if (error instanceof SyntaxError) {
+          console.error(error.message)
+          input.setCustomValidity('invalid')
         } else {
+          output.setCustomValidity('invalid')
           throw error
         }
       }
