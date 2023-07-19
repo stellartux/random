@@ -89,7 +89,7 @@ const generics = {
     return result.join(' ')
   },
   body(body, i = 0, ...xs) {
-    return body.map((stmt) => this.toCode(stmt, i + 1, ...xs)).join('\n')
+    return body.map((stmt) => this.toCode(stmt, i + 1, ...xs)).filter(Boolean).join('\n')
   },
   BlockStatement({ body }, i, opener = this.blockOpener, closer = this.blockClose(i)) {
     return opener + '\n' + this.body(body, i) + closer
@@ -1338,9 +1338,6 @@ const Racket = {
   assignmentKeyword: 'set!',
   boolTrue: '#t',
   boolFalse: '#f',
-  // ClassDeclaration(ast, i) {
-  // TODO https://docs.racket-lang.org/reference/createclass.html
-  //},
   decrementFunction: 'sub1',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {

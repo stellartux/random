@@ -93,6 +93,16 @@ describe("the function", function(){
     /** @type {HTMLInputElement} */
     const showPreamble = document.getElementById('show-preamble')
 
+    function count(target, xs) {
+      let result = 0
+      for (const x of xs) {
+        if (x === target) {
+          result++
+        }
+      }
+      return result
+    }
+
     function debounce(fn, delay = 200) {
       let debounceRef
       return (...xs) => {
@@ -123,6 +133,28 @@ describe("the function", function(){
     const onInput = debounce(convertCode)
 
     input.addEventListener('input', onInput)
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Tab') {
+        event.preventDefault()
+        const { shiftKey, srcElement } = event
+        let { selectionStart, selectionEnd, value } = srcElement
+        const start = value.lastIndexOf('\n', selectionStart - 1) + 1
+        const end = value.indexOf('\n', selectionEnd)
+        const prelude = value.slice(0, start)
+        const selection = value.slice(start, end)
+        const postlude = value.slice(end)
+        let indent = count('\n', selection) + 1
+        if (shiftKey) {
+          srcElement.value = prelude + selection.replace(/(?<=^|\n)  /g, '') + postlude
+          srcElement.selectionEnd = selectionEnd - 2 * indent
+          srcElement.selectionStart = Math.max(selectionStart - 2 * indent, start)
+        } else {
+          srcElement.value = prelude + selection.replace(/(?<=^|\n)/g, '  ') + postlude
+          srcElement.selectionEnd = selectionEnd + 2 * indent
+          srcElement.selectionStart = selectionStart + 2 * indent
+        }
+      }
+    })
     inputLanguage.addEventListener('change', onInput)
     outputLanguage.addEventListener('change', onInput)
     showPreamble.addEventListener('change', onInput)
@@ -198,7 +230,6 @@ describe("the function", function(){
 
         case 'Identifier':
           if (/assert[-_ ]?Equals?/i.test(ast.name)) {
-            console.dir(ast)
             ast.type = 'MemberExpression'
             ast.object = { name: 'assert', type: 'Identifier', start: ast.start, end: ast.end }
             ast.property = { name: 'deepEqual', type: 'Identifier', start: ast.start, end: ast.end }
