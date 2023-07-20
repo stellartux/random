@@ -77,18 +77,61 @@ const generics = {
   },
   BinaryExpression({ operator, left, right }) {
     const result = [this.toCode(left), this.toOperator(operator), this.toCode(right)]
-    function pred({ operator, type }, parentOperator) {
-      return type === 'BinaryExpression' &&
-        '+*&&||'.includes(parentOperator) &&
-        operator !== parentOperator
-    }
-    if (pred(left, operator)) {
+    if (this.binaryExpressionNeedsParens(operator, left)) {
       result[0] = `(${result[0]})`
     }
-    if (pred(right, operator)) {
+    if (this.binaryExpressionNeedsParens(operator, right)) {
       result[2] = `(${result[2]})`
     }
     return result.join(' ')
+  },
+  binaryExpressionNeedsParens(parentOperator, { operator, type }) {
+    return type === 'BinaryExpression' &&
+      this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[operator]
+  },
+  binaryOperatorPrecedence: {
+    ",": 0,
+    "=": 1,
+    "+=": 1,
+    "-=": 1,
+    "**=": 1,
+    "*=": 1,
+    "/=": 1,
+    "%=": 1,
+    "<<=": 1,
+    ">>=": 1,
+    ">>>=": 1,
+    "&=": 1,
+    "^=": 1,
+    "|=": 1,
+    "&&=": 1,
+    "||=": 1,
+    "??=": 1,
+    "||": 2,
+    "??": 2,
+    "&&": 3,
+    "|": 4,
+    "^": 5,
+    "&": 6,
+    "==": 7,
+    "!=": 7,
+    "===": 7,
+    "!==": 7,
+    "<": 8,
+    "<=": 8,
+    ">": 8,
+    ">=": 8,
+    "in": 8,
+    "instanceof": 8,
+    "<<": 9,
+    ">>": 9,
+    ">>>": 9,
+    "+": 10,
+    "-": 10,
+    "*": 11,
+    "/": 11,
+    "%": 11,
+    "**": 12,
   },
   body(body, i = 0, ...xs) {
     return body.map((stmt) => this.toCode(stmt, i + 1, ...xs)).filter(Boolean).join('\n')
@@ -184,8 +227,7 @@ const generics = {
     if (props.length < 4) {
       return `{ ${props.join(', ')} }`
     } else {
-      const ind = this.indent(i + 1)
-      return `{\n${ind}${props.join(',\n' + ind)}${'\n' + this.indent(i)}}`
+      return `{\n${ind}${props.join(',\n' + this.indent(i + 1))}${'\n' + this.indent(i)}}`
     }
   },
   Property({ key, value }, i) {
@@ -860,15 +902,31 @@ const Lua = {
   ArrayExpression({ elements }, i) {
     return `{ ${this.list(elements, i)} }`
   },
-  AssignmentExpression({ id, left, operator, right }, i) {
-    const lhs = this.toCode(left ?? id, i)
-    const rhs = this.toCode(right ?? id, i)
-    if (operator === '=') {
-      return lhs + (right ? ' = ' + rhs : '')
+  AssignmentExpression(ast, i) {
+    if (ast.operator === '=') {
+      return this.BinaryExpression(ast, i)
     } else {
-      return `${lhs} = ${lhs} ${operator[0]} ${rhs}`
+      const { left, operator, right } = ast
+      return this.BinaryExpression({
+        type: 'BinaryExpression',
+        left,
+        operator: '=',
+        right: {
+          type: 'BinaryExpression',
+          left,
+          operator: operator.slice(0, -1),
+          right,
+        },
+      }, i)
     }
   },
+  BinaryExpression(ast, i) {
+    if (ast.operator === 'in') {
+      return `${this.toCode(ast.right, i, ast)}[${this.toCode(ast.left, i, ast)}] ~= nil`
+    }
+    return generics.BinaryExpression.call(this, ast, i)
+  },
+  binaryOperatorPrecedence: Object.setPrototypeOf({ "in": 7 }, generics.binaryOperatorPrecedence),
   BlockStatement({ body }, i, blockOpen = this.blockOpen, blockClose = this.blockClose) {
     return `\n${this.body(body, i, blockOpen, blockClose)}\n${this.indent(i)}end`
   },
@@ -1102,7 +1160,7 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
       case '!=': case '!==': return '~='
       default: console.warn('Unknown operator ' + op)
       case '+': case '-': case '*': case '/': case '==': case '<<': case '>>':
-      case '<': case '>': case '<=': case '>=':
+      case '<': case '>': case '<=': case '>=': case '%': case '=':
         return op
     }
   },
