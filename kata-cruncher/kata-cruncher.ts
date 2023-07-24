@@ -50,4 +50,4 @@ async function cli(): Promise<void> {
   }
 }
 
-if (import.meta.main) cli();
+if (import.meta.main) await cli();

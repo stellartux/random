@@ -1,9 +1,9 @@
-// import { parse } from 'https://cdn.skypack.dev/espree@9.5.2'
-import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.5.2-QB1pleC5s3x1EAqjiTTI/mode=imports,min/optimized/espree.js'
+// import { parse } from 'https://cdn.skypack.dev/espree@9'
+import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.6.1-Wxp29AG7hjpUOCb3BWsw/mode=imports/optimized/espree.js'
 
 const identity = (x) => x
 
-export class AbandonError extends Error {}
+export class AbandonError extends Error { }
 
 function abandon(ast, reason = 'Something went wrong') {
   console.dir(ast)
@@ -20,42 +20,50 @@ function isIteratorInitializer({ computed, key, type }) {
 
 function isNumericalForStatement({ init, test, type, update }) {
   return type === 'ForStatement' &&
-    init.type === 'VariableDeclaration' &&
+    init?.type === 'VariableDeclaration' &&
     init.kind === 'let' &&
     init.declarations.length === 1 &&
     init.declarations[0].type === 'VariableDeclarator' &&
-    test.type === 'BinaryExpression' &&
+    test?.type === 'BinaryExpression' &&
     (test.operator[0] === '<' || test.operator[0] === '>') &&
     test.left.type === 'Identifier' &&
     test.left.name === init.declarations[0].id.name &&
     (
-      update.type === 'UpdateExpression' && update.argument.name === init.declarations[0].id.name
-      || update.type === 'AssignmentExpression' && update.left.name === init.declarations[0].id.name
+      update?.type === 'UpdateExpression' && update.argument.name === init.declarations[0].id.name
+      || update?.type === 'AssignmentExpression' && update.left.name === init.declarations[0].id.name
     )
+}
+
+function loopsForever(ast) {
+  if (ast?.type === 'ForStatement') {
+    return !ast.test || (ast.test.type?.endsWith('Literal') && ast.test.value)
+  } else if (ast?.type === 'WhileStatement') {
+    return ast.test.type?.endsWith('Literal') && ast.test.value
+  }
 }
 
 /** Given an expression, returns an expression representing its logical inverse. */
 function not(ast) {
   const { argument, operator, type, value } = ast
+  const opposites = {
+    '==': '!=', '!=': '==', '===': '!==', '!==': '===',
+    '<': '>=', '>': '<=', '<=': '>', '>=': '<'
+  }
   if (type === 'UnaryExpression' && argument.type === 'UnaryExpression' && argument.operator === '!') {
     return argument
-  } else if (type === 'BinaryExpression' && '!==='.includes(operator)) {
-    return {
-      ...ast,
-      operator: (operator[0] === '!' ? '=' : '!') + operator.slice(1)
-    }
-  } else if (type === 'Literal' && typeof value === 'boolean') {
+  } else if (type === 'BinaryExpression' && opposites[operator]) {
+    return { ...ast, operator: opposites[operator] }
+  } else if (type === 'Literal') {
     return {
       type: 'Literal',
-      raw: value ? 'false' : 'true',
+      raw: !value ? 'true' : 'false',
       value: !value
     }
-  } else {
-    return {
-      type: 'UnaryExpression',
-      operator: '!',
-      argument: ast
-    }
+  }
+  return {
+    type: 'UnaryExpression',
+    operator: '!',
+    argument: ast
   }
 }
 
@@ -68,12 +76,28 @@ const generics = {
   ArrayPattern(ast) {
     return this.ArrayExpression(ast)
   },
+  AssignmentPattern(ast, i) {
+    return this.AssignmentExpression({ ...ast, operator: '=' }, i)
+  },
   ArrowFunctionExpression(ast, i) {
+    const { body } = ast
+    if (!body.type.startsWith('Block')) {
+      ast = {
+        ...ast,
+        body: {
+          type: 'BlockStatement',
+          body: [{
+            type: 'ReturnStatement',
+            argument: body
+          }],
+        }
+      }
+    }
     return this.FunctionExpression(ast, i)
   },
   AssignmentExpression({ id, left, operator, right }, i) {
     const rhs = this.toCode(right ?? id, i)
-    return this.toCode(left ?? id, i) + (rhs ? ' ' + operator + ' ' + rhs : '')
+    return this.toCode(left ?? id, i) + (rhs ? ' ' + this.toOperator(operator) + ' ' + rhs : '')
   },
   BinaryExpression({ operator, left, right }) {
     const result = [this.toCode(left), this.toOperator(operator), this.toCode(right)]
@@ -85,9 +109,9 @@ const generics = {
     }
     return result.join(' ')
   },
-  binaryExpressionNeedsParens(parentOperator, { operator, type }) {
-    return type === 'BinaryExpression' &&
-      this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[operator]
+  binaryExpressionNeedsParens(parentOperator, ast) {
+    return ast && ast.type === 'BinaryExpression' &&
+      this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[ast.operator]
   },
   binaryOperatorPrecedence: {
     ",": 0,
@@ -154,6 +178,13 @@ const generics = {
   },
   conditionThen: '?',
   conditionElse: ':',
+  consequent(ast, i) {
+    if (ast?.type.startsWith('Block')) {
+      return '\n' + this.body(ast.body, i)
+    } else {
+      return '\n' + this.indent(i + 1) + this.toCode(ast, i)
+    }
+  },
   DebuggerStatement() {
     console.warn('Skipping debugger statement')
   },
@@ -163,11 +194,33 @@ const generics = {
   FunctionDeclaration(ast, i, ...xs) {
     return `${this.indent(i)}${this.FunctionExpression(ast, i, ...xs)}\n`
   },
-  elseKeyword: ' else',
+  elseIfKeyword: 'elseif',
+  elseKeyword: 'else',
   functionKeyword: 'function',
-  FunctionExpression({ body, id, params }, i, keyword = id ? this.functionKeyword : this.lambdaKeyword) {
-    return `${keyword} ${id ? this.toCode(id) : ''}(${this.list(params)})${this.BlockStatement(body, i, this.halfBlockOpener)}`
+  FunctionExpression(ast, i, keyword = ast.id ? this.functionKeyword : this.lambdaKeyword) {
+    const { async, body, generator, id, params } = ast
+    if (generator) {
+      if (this.generatorKeyword) {
+        keyword = this.generatorKeyword
+      } else {
+        abandon(ast, 'Generator functions not supported.')
+      }
+    }
+    if (async) {
+      if (this.asyncKeyword) {
+        keyword = this.asyncKeyword + keyword
+      } else {
+        console.warn('Stripping async')
+      }
+    }
+    return `${keyword} ${id ? this.CallExpression({
+      type: 'CallExpression',
+      callee: id,
+      arguments: params
+    }) : `(${this.list(params)})`}${this.halfBlockOpener}
+${this.body(body.body, i)}${this.blockClose(i)}`
   },
+  halfBlockOpener: '',
   indent(depth = 0) {
     return ' '.repeat(depth * this.tabWidth)
   },
@@ -175,13 +228,32 @@ const generics = {
     return ast.type === 'Literal' ||
       (ast.type === 'ObjectExpression' && this.isQuoteable(ast))
   },
-  Identifier: ({ name }) => name,
-  IfStatement({ alternate, consequent, test }, i) {
-    return this.indent(i) + this.ifKeyword + this.test(test, i) + this.thenKeyword +
-      this.toCode(consequent, i, '', alternate ? '\n' : this.blockClose(i)) +
-      (alternate ? this.elseKeyword + this.toCode(alternate, i) : '')
+  Identifier({ name }) {
+    if (name === 'undefined') {
+      return this.undefined
+    }
+    return name
+  },
+  IfExpression({ alternate, consequent, test }, i) {
+    const result = [
+      this.ifKeyword,
+      this.test(test, i),
+      this.thenKeyword,
+      this.consequent(consequent, i)
+    ]
+    for (; alternate?.type.startsWith('If'); alternate = alternate.alternate) {
+      result.push('\n', this.indent(i), this.elseIfKeyword, ' ', this.test(alternate.test, i), this.thenKeyword, this.consequent(alternate.consequent, i))
+    }
+    if (alternate) {
+      result.push('\n', this.indent(i), this.elseKeyword, this.consequent(alternate, i))
+    }
+    result.push(this.blockClose(i))
+    return result.join('')
   },
   ifKeyword: 'if ',
+  IfStatement(ast, i, parent) {
+    return `${this.indent(i)}${this.IfExpression(ast, i, parent)}`
+  },
   lambdaKeyword: 'function',
   thenKeyword: '',
   isQuoteable(ast) {
@@ -206,6 +278,8 @@ const generics = {
       return value ? this.boolTrue : this.boolFalse
     } else if (typeof value === 'string') {
       return `"${raw.slice(1, -1)}"`
+    } else if (value === null) {
+      return this.null
     } else {
       return raw
     }
@@ -222,6 +296,7 @@ const generics = {
       return `${this.toCode(object, i)}.${this.toCode(property, i)}`
     }
   },
+  null: 'null',
   ObjectExpression({ properties }, i) {
     const props = properties.map((prop) => this.Property(prop, i))
     if (props.length < 4) {
@@ -230,19 +305,26 @@ const generics = {
       return `{\n${ind}${props.join(',\n' + this.indent(i + 1))}${'\n' + this.indent(i)}}`
     }
   },
+  PrivateIdentifier(ast) {
+    return this.Identifier(ast)
+  },
   Property({ key, value }, i) {
     return this.toCode(key, i) + ': ' + this.toCode(value, i)
   },
   Program({ body }) {
     return body.map(x => this.toCode(x, 0)).join('\n')
   },
+  RegExpLiteral({ pattern, flags }) {
+    return `/${pattern}/${flags}`
+  },
   ReturnStatement({ argument }, i) {
     return this.indent(i) + 'return ' + this.toCode(argument, i)
   },
   tabWidth: 2,
   test(ast, i) {
-    return this.toCode(ast, i)
+    return this.toCode(ast, i) + this.thenKeyword
   },
+  thenKeyword: '',
   ThrowStatement(ast, i) {
     if (this.throwKeyword) {
       return `${this.indent(i)}${this.throwKeyword} ${this.toCode(ast.argument, i)}`
@@ -251,7 +333,7 @@ const generics = {
   },
   toCode(ast, ...xs) {
     if (!ast) {
-      return this.undefined
+      return ''
     } else if (this[ast.type]) {
       return this[ast.type](ast, ...xs)
     } else {
@@ -266,6 +348,7 @@ const generics = {
       return this.toCode(argument, i) + operator
     }
   },
+  undefined: 'undefined',
   UpdateExpression({ argument, operator, prefix }, i) {
     if (prefix) {
       return this.indent(i) + this.toOperator(operator) + this.toCode(argument)
@@ -310,7 +393,7 @@ const sexpr = {
     if (operator === '=') {
       return `(${this.assignmentKeyword} ${lhs} ${rhs})`
     } else {
-      return `(${this.assignmentKeyword} ${lhs} (${operator[0]} ${lhs} ${rhs}))`
+      return `(${this.assignmentKeyword} ${lhs} (${this.toOperator(operator.slice(0, -1))} ${lhs} ${rhs}))`
     }
   },
   BinaryExpression({ operator, left, right }, i) {
@@ -334,25 +417,43 @@ const sexpr = {
   CallExpression(ast, i) {
     return `(${this.list([ast.callee, ...ast.arguments], i)})`
   },
-  ConditionalExpression({ alternate, consequent, test }, i) {
+  ConditionalExpression(ast) {
+    const { alternate, consequent } = ast
     if (consequent.type === 'BlockStatement' && consequent.body.length === 1) {
       consequent = consequent.body[0]
     }
     if (alternate && alternate.type === 'BlockStatement' && alternate.body.length === 1) {
       alternate = alternate.body[0]
     }
-    if (alternate) {
-      return `(if ${this.test(test, i)}
-${this.indent(i + 4)}${this.toCode(consequent, i + 4)}
-${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
-    } else {
-      return `(when ${this.test(test, i)}\n${this.toCode(consequent, i + 1)})`
-    }
+    return this.IfExpression(ast)
   },
   halfBlockOpener: '',
-  Identifier: ({ name }) => toKebabCase(name),
+  Identifier({ name }) {
+    if (name === 'undefined') {
+      return this.undefined
+    }
+    return toKebabCase(name)
+  },
+  IfExpression({ alternate, consequent, test }, i) {
+    if (alternate?.type.startsWith('If')) {
+      const result = [
+        '(cond \n',
+        this.indent(i), '(', this.toCode(test, i),
+        this.toCode(consequent, i), ')'
+      ]
+      for (; alternate?.type.startsWith('If'); alternate = alternate.alternate) {
+        result.push(`\n${this.indent(i)}(${this.toCode(alternate.test, i)}${this.toCode(alternate.consequent, i)})`)
+      }
+      result.push(`\n${this.indent(i)}(${this.elseKeyword}${this.toCode(alternate, i)})`)
+      return result.join('') + ')'
+    } else if (alternate) {
+      return `(if ${this.test(test, i)}${this.toCode(consequent, i + 2)}${this.toCode(alternate, i + 2)})`
+    } else {
+      return `(when ${this.test(test, i)}\n${this.toCode(consequent, i + 5)})`
+    }
+  },
   IfStatement(ast, i) {
-    return this.indent(i) + this.ConditionalExpression(ast, i + 1)
+    return this.indent(i) + this.IfExpression(ast, i + 1)
   },
   LabeledStatement(ast) {
     abandon(ast, 'No goto in s-expr based languages.')
@@ -380,6 +481,7 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
       return `(make-${type}${ast.arguments.length ? ' ' + this.list(ast.arguments, i) : ''})`
     }
   },
+  null: 'nil',
   RestElement({ argument }) {
     return `. ${this.toCode(argument)}`
   },
@@ -390,6 +492,14 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
     return `(begin ${expressions.map((expr) => this.toCode(expr, i)).join(' ')})`
   },
   tabWidth: 1,
+  toOperator(op, i) {
+    switch (op) {
+      case '&&': return 'and'
+      case '||': case '??': return 'or'
+    }
+    return generics.toOperator.call(this, op, i)
+  },
+  undefined: 'nil',
   UpdateExpression({ argument, operator }, i) {
     const id = this.toCode(argument)
     return `(${this.assignmentKeyword} ${id} (${operator === '++' ? this.incrementFunction : this.decrementFunction} ${id}))`
@@ -400,6 +510,9 @@ ${this.indent(i + 4)}${this.toCode(alternate, i + 4)})`
       .join(' ')
       })`
   },
+  YieldExpression({ argument }, i) {
+    return `(yield ${this.toCode(argument, i)})`
+  }
 }
 Object.setPrototypeOf(sexpr, generics)
 
@@ -442,6 +555,7 @@ const CommonLisp = {
       return '(' + this.list(args) + ')'
     }
   },
+  elseKeyword: 't',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
       const { body, init, test } = ast
@@ -468,7 +582,7 @@ const CommonLisp = {
       case '==': return 'equal'
       case '===': return 'eql'
     }
-    return generics.toOperator.call(this, op, i)
+    return sexpr.toOperator.call(this, op, i)
   },
   undefined: 'nil',
   UpdateExpression({ argument, operator, prefix }, i) {
@@ -491,6 +605,7 @@ const JavaScript = {
   ArrowFunctionExpression({ body, params }, i) {
     return `(${this.list(params)}) => ${this.toCode(body, i)}`
   },
+  asyncKeyword: 'async ',
   BreakStatement({ label }, i) {
     return this.indent(i) + 'break' + (label ? ' ' + label.name : '')
   },
@@ -512,6 +627,8 @@ ${this.indent(i)}}
   DoWhileStatement({ body, test }, i) {
     return `${this.indent(i)}do ${this.toCode(body, i)} while ${this.test(test)}`
   },
+  elseKeyword: '} else {',
+  elseIfKeyword: '} else if',
   ExportNamedDeclaration({ declaration }, i) {
     return `export ${this.toCode(declaration, i)}`
   },
@@ -524,6 +641,7 @@ ${this.indent(i)}}
   ForOfStatement({ body, left, right }, i) {
     return this.indent(i) + `for (${this.toCode(left)} of ${this.toCode(right, i)}) ${this.toCode(body, i)}`
   },
+  generatorKeyword: 'function*',
   halfBlockOpener: ' {',
   Identifier: ({ name }) => name[0] + toCamelCase(name.slice(1)),
   LabeledStatement({ body, label }, i) {
@@ -559,6 +677,9 @@ ${this.indent(i)}}
   NewExpression(ast, i) {
     return `new ${toTitleCase(this.toCode(ast.callee, i))}(${this.list(ast.arguments, i)})`
   },
+  PrivateIdentifier({ name }) {
+    return '#' + name
+  },
   PropertyDefinition(ast, i) {
     const { key, value } = ast
     let result = this.indent(i)
@@ -570,9 +691,6 @@ ${this.indent(i)}}
       result += ' = ' + this.toCode(value)
     }
     return result
-  },
-  RegExpLiteral({ pattern, flags }) {
-    return `/${pattern}/${flags}`
   },
   RestElement({ argument }) {
     return `...${this.toCode(argument)}`
@@ -618,12 +736,22 @@ ${this.indent(i)}}
     return this.indent(i) + ast.kind + ' ' + ast.declarations.map((d) => this.toCode(d, i)).join(', ')
   },
   whileOpener: ' {',
+  YieldExpression({ argument, delegate }, i) {
+    return `yield${delegate ? '*' : ''} ${this.toCode(argument, i)}`
+  },
 }
 Object.setPrototypeOf(JavaScript, generics)
 
 const Julia = {
   ArrowFunctionExpression({ body, params = [] }, i = 0) {
     return `(${params.map(x => this.toCode(x))}) -> ${this.toCode(body, i)} `
+  },
+  AssignmentExpression(ast, i) {
+    if (ast.operator === '??=') {
+      const left = this.toCode(ast.left)
+      return `${left} = something(${left}, ${this.toCode(ast.right, i)})`
+    }
+    return generics.AssignmentExpression.call(this, ast, i)
   },
   blockOpener: 'begin',
   blockCloser: 'end',
@@ -640,7 +768,8 @@ const Julia = {
       } else if (ast.arguments[1].type !== 'CallExpression') {
         return `@fact ${lhs} --> ${rhs}`
       } else {
-        return `expected = ${rhs} \n${this.indent(i)} @fact ${lhs} --> expected "@fact ${lhs} --> $(repr(expected))"`
+        return `expected = ${rhs}
+${this.indent(i)}@fact ${lhs} --> expected "${this.toCode(ast.arguments[0].callee)}(${ast.arguments[0].arguments.length ? '$(repr(' + ast.arguments[0].arguments.map((arg) => this.toCode(arg)).join(')), $(repr(') + ')' : ''})) --> $(repr(expected))"`
       }
     } else if (ast.callee.type === 'MemberExpression') {
       if (ast.callee.object.name === 'console') {
@@ -730,12 +859,13 @@ ${this.indent(i)}end\n`
     }
     return result
   },
-  ContinueStatement({ label }, i) {
-    if (label) {
-      throw new Error('Labeled continue not supported in Julia')
+  ContinueStatement(ast, i) {
+    if (ast.label) {
+      abandon(ast, 'Labeled continue not supported in Julia')
     }
     return this.indent(i) + 'continue'
   },
+  elseIfKeyword: 'elseif',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
       const { body, init, test, update } = ast
@@ -772,12 +902,14 @@ ${this.indent(i)}end\n`
     return generics.FunctionDeclaration.call(this, ast, i)
   },
   halfBlockOpener: '',
-  Identifier: ({ name }) => {
+  Identifier({ name }) {
     switch (name) {
       case 'shift': return 'popfirst!'
       case 'unshift': return 'pushfirst!'
-      case 'pop': case 'push':
+      case 'append': case 'pop': case 'push':
         return name + '!'
+      case 'undefined':
+        return 'nothing'
       default:
         return name[0] === name[0].toLowerCase() ? name.toLowerCase() : toTitleCase(name)
     }
@@ -827,6 +959,7 @@ ${this.indent(i)}end\n`
   NewExpression(ast, i) {
     return `${toTitleCase(this.toCode(ast.callee, i))}(${this.list(ast.arguments, i)})`
   },
+  null: 'nothing',
   ObjectExpression({ properties }, i) {
     const props = properties.map((prop) => this.Property(prop, i))
     if (props.length < 4) {
@@ -920,6 +1053,9 @@ const Lua = {
       }, i)
     }
   },
+  AssignmentPattern(ast, i) {
+    return this.toCode(ast.left, i)
+  },
   BinaryExpression(ast, i) {
     if (ast.operator === 'in') {
       return `${this.toCode(ast.right, i, ast)}[${this.toCode(ast.left, i, ast)}] ~= nil`
@@ -927,6 +1063,7 @@ const Lua = {
     return generics.BinaryExpression.call(this, ast, i)
   },
   binaryOperatorPrecedence: Object.setPrototypeOf({ "in": 7 }, generics.binaryOperatorPrecedence),
+  blockCloser: 'end',
   BlockStatement({ body }, i, blockOpen = this.blockOpen, blockClose = this.blockClose) {
     return `\n${this.body(body, i, blockOpen, blockClose)}\n${this.indent(i)}end`
   },
@@ -1080,10 +1217,39 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
   ForInStatement({ body, left, right }, i) {
     return `for ${this.toCode(left.declarations[0].id)} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
   },
+  FunctionExpression(ast, i) {
+    const { async, body, generator, id, params } = ast
+    if (generator) {
+      abandon(ast, 'Generator functions not supported')
+    }
+    if (async) {
+      console.warn('Stripping async')
+    }
+    const result = [
+      this.functionKeyword,
+      ' ',
+      this.toCode(id),
+      '(',
+      this.list(params, i),
+      ')',
+    ]
+    for (const param of params) {
+      if (param.type === 'AssignmentPattern') {
+        result.push('\n' + this.indent(i + 1) + this.toCode({
+          ...param,
+          operator: '??=',
+          type: 'AssignmentExpression',
+        }))
+      }
+    }
+    result.push(this.toCode(body, i))
+    return result.join('')
+  },
   Identifier({ name }) {
     const keys = {
       Math: 'math',
-      toString: 'tostring'
+      toString: 'tostring',
+      undefined: 'nil',
     }
     if (Object.hasOwn(keys, name)) {
       return keys[name]
@@ -1098,6 +1264,8 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
       return 'print'
     } else if (ast.property.name === 'length') {
       return '#' + this.toCode(ast.object)
+    } else if (ast.object.type === 'Literal') {
+      return `(${this.toCode(ast.object, i)}):${this.toCode(ast.property, i)}`
     } else {
       return generics.MemberExpression.call(this, ast, i)
     }
@@ -1118,6 +1286,7 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     }
     return `${this.toCode(ast.callee, i)}:new(${this.list(ast.arguments, i)})`
   },
+  null: 'nil',
   Property({ key, value }, i) {
     let keyStr = this.toCode(key, i)
     if (!Number.isNaN(+keyStr)) {
@@ -1127,9 +1296,10 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     }
     return keyStr + ' = ' + this.toCode(value, i)
   },
-  RegExpLiteral({ pattern, flags }) {
+  RegExpLiteral(ast) {
+    const { flags, pattern } = ast
     if (flags) {
-      throw new Error('Unimplemented: regexp flags')
+      abandon(ast, 'Unimplemented: regexp flags')
     }
     console.info(`Converting /${pattern}/ to Lua string match pattern`)
     return `"${pattern.replace(/\\/g, '%').replace(/"/g, '\\"').replace(/\\\//g, '/')}"`
@@ -1225,6 +1395,25 @@ const Python = {
     }
     return `lambda ${this.list(params)}: ${this.toCode(body)}`
   },
+  AssignmentExpression(ast, i) {
+    switch (ast.operator) {
+      case '??=': case '&&=': case '||=':
+        const { left, operator, right } = ast
+        return this.BinaryExpression({
+          type: 'BinaryExpression',
+          left,
+          operator: '=',
+          right: {
+            type: 'BinaryExpression',
+            left,
+            operator: operator.slice(0, -1),
+            right,
+          },
+        }, i)
+      default:
+        return this.BinaryExpression(ast, i)
+    }
+  },
   blockOpener: ':',
   blockCloser: '',
   blockClose() {
@@ -1244,6 +1433,8 @@ ${this.body(body.body, i, ast)}\n\n`
     }
     return result
   },
+  elseKeyword: 'else:',
+  elseIfKeyword: 'elif',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
       const { body, init, test, update } = ast
@@ -1275,6 +1466,7 @@ ${this.body(body.body, i)}`
 ${this.body(body.body, i)}`
   },
   functionKeyword: 'def',
+  halfBlockOpener: ':',
   MemberExpression(ast, i) {
     if (ast.object.name === 'console') {
       return 'print'
@@ -1333,6 +1525,7 @@ ${this.indent(i)}`
       return this.CallExpression(ast, i)
     }
   },
+  null: 'None',
   Property({ key, value }, i) {
     let keyStr = this.toCode(key, i)
     if (!Number.isNaN(+keyStr)) {
@@ -1349,9 +1542,10 @@ ${this.indent(i)}`
   PropertyDefinition(ast, i) {
     return this.indent(i) + this.Property(ast, i)
   },
-  RegExpLiteral({ pattern, flags }) {
+  RegExpLiteral(ast) {
+    const { flags, pattern } = ast
     if (flags) {
-      throw new Error('Unimplemented: regexp flags')
+      abandon(ast, 'Unimplemented: regexp flags')
     }
     return `r"${pattern.replace(/"/g, '\\"').replace(/\\\//g, '/')}"`
   },
@@ -1367,6 +1561,9 @@ ${this.indent(i)}`
   Super() {
     return 'super()'
   },
+  test(ast, i) {
+    return generics.test.call(this, ast, i) + ':'
+  },
   ThisExpression() {
     return 'self'
   },
@@ -1377,7 +1574,7 @@ ${this.indent(i)}`
       case 'delete': return 'del'
       case '!': return 'not '
       case '&&': return 'and'
-      case '||': return 'or'
+      case '??': case '||': return 'or'
       case '===': return '=='
       case '!==': return '!='
       case '>>>':
@@ -1401,8 +1598,9 @@ ${this.indent(i)}`
     result += this.blockClose(i)
     return result
   },
-  undefined: 'nil',
-  UpdateExpression: Julia.UpdateExpression
+  undefined: 'None',
+  UpdateExpression: Julia.UpdateExpression,
+  whileOpener: '',
 }
 Object.setPrototypeOf(Python, generics)
 
@@ -1422,7 +1620,7 @@ const Racket = {
         update = ` (${this.toOperator(ast.update.operator.slice(0, -1))} ${id} ${this.toCode(ast.update.right)})`
       }
       return `${this.indent(i)}(do ((${id} ${this.toCode(decl.init)}${update}))
-${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
+${this.indent(i + 4)}(${this.test(not(ast.test))})${this.toCode(ast.body, i + 1)})`
     } else {
       abandon(ast, 'Unimplemented: non-numerical for statement')
     }
@@ -1438,10 +1636,21 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
     abandon(ast, 'Unhandled `for..of` statement')
   },
   functionKeyword: '(define',
+  FunctionExpression(ast, i) {
+    if (ast.generator) {
+      let { body } = ast
+      if (body.type === 'BlockStatement' && body.body.length === 1 && loopsForever(body.body[0])) {
+        body = body.body[0]
+      }
+    }
+    return generics.FunctionExpression.call(this, ast, i)
+  },
+  generatorKeyword: '(generator',
   incrementFunction: 'add1',
-  RegExpLiteral({ pattern, flags }) {
+  RegExpLiteral(ast) {
+    const { pattern, flags } = ast
     if (flags) {
-      throw new Error('Unimplemented: regexp flags')
+      abandon(ast, 'Unimplemented: regexp flags')
     }
     return `#px"${pattern}"`
   },
@@ -1454,7 +1663,7 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
       case '==': return 'equal?'
       case '===': return 'eq?'
     }
-    return generics.toOperator.call(this, op)
+    return sexpr.toOperator.call(this, op)
   },
   TryStatement({ block, handler, finalizer }, i) {
     let result = `(with-handlers ([exn:fail?`
@@ -1472,11 +1681,86 @@ ${this.indent(i + 4)}(${this.test(ast.test)})${this.toCode(ast.body, i + 1)})`
   undefined: '#f',
   variableDeclarationKeyword: 'define',
   WhileStatement({ body, test }, i) {
-    return `${this.indent(i)}(do () (${this.test(test, i)})
+    return `${this.indent(i)}(do () (${this.test(not(test), i)})
 ${this.body(body.body, i)})`
   }
 }
 Object.setPrototypeOf(Racket, sexpr)
+
+const Ruby = {
+  ArrowFunctionExpression({ body, expression, params }, i) {
+    if (expression) {
+      return `{ |${this.list(params, i)}| ${this.toCode(body, i)} }`
+    } else {
+      return `do |${this.list(params, i)}|${this.toCode(body, i)}`
+    }
+  },
+  blockOpener: '',
+  blockCloser: 'end',
+  CallExpression(ast, i) {
+    if (ast.callee.type === 'MemberExpression' && ast.arguments.length === 0) {
+      return this.toCode(ast.callee, i)
+    }
+    return generics.CallExpression.call(this, ast, i)
+  },
+  ClassBody({ body }, i) {
+    return '\n' + this.body(body, i)
+  },
+  ClassDeclaration({ body, id, superClass }, i) {
+    const result = ['class']
+    if (id) {
+      result.push(' ', this.toCode(id))
+    }
+    if (superClass) {
+      result.push(' < ', this.toCode(superClass))
+    }
+    result.push(this.toCode(body, i))
+    result.push(this.blockClose(i))
+    return result.join('')
+  },
+  elseIfKeyword: 'elsif',
+  functionKeyword: 'def',
+  lambdaKeyword: 'do',
+  MemberExpression(ast, i) {
+    if (ast.object?.name === 'console') {
+      return 'puts'
+    }
+    return generics.MemberExpression.call(this, ast, i)
+  },
+  MethodDefinition(ast, i) {
+    const { computed, key, kind, value } = ast
+    const result = [this.indent(i), 'def ']
+    if (ast.static) {
+      result.push('self.')
+    }
+    result.push(this.toCode(key), '(', this.list(value.params, i), ')', this.toCode(value.body, i))
+    return result.join('')
+  },
+  NewExpression(ast, i) {
+    return `${this.toCode(ast.callee)}.new(${this.list(ast.arguments)})`
+  },
+  null: 'nil',
+  PropertyDefinition(ast, i) {
+    const { computed, key, value } = ast
+    if (computed) {
+      abandon(ast, 'Computed properties not supported')
+    }
+    // todo: accessors, private identifiers
+    const result = [this.indent(i), '@', this.toCode(key, i)]
+    if (value) {
+      result.push(' = ', this.toCode(value, i))
+    }
+    return result.join('')
+  },
+  toOperator(operator) {
+    if (operator.startsWith('??')) {
+      return '||' + operator.slice(2)
+    }
+    return operator
+  },
+  undefined: 'undef',
+}
+Object.setPrototypeOf(Ruby, generics)
 
 /** @param {string} str */
 function toCamelCase(str) {
@@ -1501,7 +1785,7 @@ function toTitleCase(str) {
   return str[0].toUpperCase() + str.slice(1).replace(/\W./g, (x) => x[1].toUpperCase())
 }
 
-export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Python, Racket }
+export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Python, Racket, Ruby }
 
 /** @type {Record<string,{(code: string) => { type: 'Program', body: {}[] }}>}*/
 export const from = {
@@ -1526,3 +1810,73 @@ export const to = new Proxy({
     }
   }
 })
+
+async function cli() {
+  const extToLang = {
+    js: "JavaScript",
+    jl: "Julia",
+    lisp: "Common Lisp",
+    lua: "Lua",
+    py: "Python",
+    rb: "Ruby",
+    rkt: "Racket",
+    scm: "Racket",
+    ts: "JavaScript",
+  }
+
+  const args = {
+    _: globalThis.scriptArgs ?? globalThis.Deno?.args
+  }
+  while (args._.length && args._[0].startsWith('-')) {
+    const arg = args._.shift()
+    if (arg === '--') {
+      break
+    } else if (arg.startsWith('--')) {
+      const match = arg.match(/--([^=]+)(?:=(.*))/)
+      args[match[1]] = match[2] ?? true
+    } else {
+      args[arg[1]] = true
+    }
+  }
+  args._ = scriptArgs
+
+  if (args.help || args.h) {
+    console.log(`
+    
+        Kata Cruncher - the test case conversion tool for CodeWars
+        usage: kata-cruncher [options] [filenames...]
+    
+    Options:
+    -h, --help
+        Show this help message.
+    --to='${[...Object.values(extToLang)].join("','")}'
+        Choose the output language. Defaults to 'Julia'. 
+        Short versions of the language name may also be used.
+    `)
+    return
+  }
+
+  const decoder = new TextDecoder("utf-8")
+
+  if (!args.to) {
+    args.to = "Julia"
+  } else if (args.to.toLowerCase?.() in extToLang) {
+    args.to = extToLang[args.to.toLowerCase()]
+  }
+
+  if (args._.length === 0) {
+    console.log(
+      to[args.to](from.JavaScript(decoder.decode(await readAll(Deno.stdin)))),
+    )
+  } else {
+    for (const filename of args._) {
+      console.log(
+        to[args.to](decoder.decode(Deno.readFileSync(filename))),
+      )
+    }
+  }
+}
+
+if (import.meta.main) {
+  await cli()
+}
