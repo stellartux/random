@@ -10,6 +10,12 @@ function abandon(ast, reason = 'Something went wrong') {
   throw new AbandonError(reason)
 }
 
+function isFloorDivide({ operator, left, right, type }) {
+  return type === 'BinaryExpression' && operator === '|'
+    && right.type === 'Literal' && right.value === 0
+    && left.type === 'BinaryExpression' && left.operator === '/'
+}
+
 function isIteratorInitializer({ computed, key, type }) {
   return type === 'MethodDefinition'
     && computed
@@ -32,6 +38,12 @@ function isNumericalForStatement({ init, test, type, update }) {
       update?.type === 'UpdateExpression' && update.argument.name === init.declarations[0].id.name
       || update?.type === 'AssignmentExpression' && update.left.name === init.declarations[0].id.name
     )
+}
+
+function isStringConcatenation({ operator, left, right, type }) {
+  return type === 'BinaryExpression' && operator === '+' && (
+    left.type === 'Literal' && typeof left.value === 'string' ||
+    right.type === 'Literal' && typeof right.value === 'string')
 }
 
 function loopsForever(ast) {
@@ -357,25 +369,20 @@ ${this.body(body.body, i)}${this.blockClose(i)}`
     }
   },
   VariableDeclarator({ id, init }, i) {
-    return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
+    return this.toCode(id, i) + ' = ' + (init ? this.toCode(init) : this.undefined)
   },
   VariableDeclaration({ declarations }, i) {
-    const result = [this.indent(i)]
+    if (declarations.length === 1) {
+      return `${this.indent(i)}${this.toCode(declarations[0], i)}`
+    }
     const ids = []
     const inits = []
+    const nothing = { type: 'Literal', value: null }
     for (const { id, init } of declarations) {
       ids.push(id)
-      inits.push(init)
+      inits.push(init ?? nothing)
     }
-    result.push(this.list(ids))
-    while (inits.at(-1) === null) {
-      inits.pop()
-    }
-    if (inits.some(x => x !== undefined)) {
-      result.push(' = ')
-      result.push(this.list(inits))
-    }
-    return result.join('')
+    return `${this.indent(i)}${this.list(ids)} = ${this.list(inits, i)}`
   },
   WhileStatement({ body, test }, i, opener = this.whileOpener) {
     return this.indent(i) + 'while ' + this.test(test, i, opener) + this.toCode(body, i, this.whileOpener)
@@ -504,11 +511,11 @@ const sexpr = {
     const id = this.toCode(argument)
     return `(${this.assignmentKeyword} ${id} (${operator === '++' ? this.incrementFunction : this.decrementFunction} ${id}))`
   },
+  VariableDeclarator({ id, init }, i) {
+    return this.toCode(id, i) + (init ? ' ' + this.toCode(init) : '')
+  },
   VariableDeclaration({ declarations }, i) {
-    return this.indent(i) + `(${this.variableDeclarationKeyword} ${declarations
-      .map((decl) => `${this.toCode(decl.id, i)} ${this.toCode(decl.init, i)}`)
-      .join(' ')
-      })`
+    return this.indent(i) + `(${this.variableDeclarationKeyword} ${this.list(declarations, i)})`
   },
   YieldExpression({ argument }, i) {
     return `(yield ${this.toCode(argument, i)})`
@@ -732,8 +739,11 @@ ${this.indent(i)}}
     }
   },
   undefined: 'undefined',
-  VariableDeclaration(ast, i) {
-    return this.indent(i) + ast.kind + ' ' + ast.declarations.map((d) => this.toCode(d, i)).join(', ')
+  VariableDeclarator({ id, init }, i) {
+    return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
+  },
+  VariableDeclaration({ kind, declarations }, i) {
+    return `${this.indent(i)}${kind} ${this.list(declarations)}`
   },
   whileOpener: ' {',
   YieldExpression({ argument, delegate }, i) {
@@ -755,6 +765,38 @@ const Julia = {
   },
   blockOpener: 'begin',
   blockCloser: 'end',
+  BinaryExpression(ast, ...xs) {
+    if (ast.operator === '|'
+      && ast.right.type === 'Literal' && ast.right.value === 0
+      && ast.left.type === 'BinaryExpression' && ast.left.operator === '/') {
+      ast = { ...ast.left, operator: '÷' }
+    } else if (isStringConcatenation(ast)) {
+      ast = { ...ast, operator: '*' }
+    }
+    return generics.BinaryExpression.call(this, ast, ...xs)
+  },
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    "==": 4,
+    "===": 4,
+    "!=": 4,
+    "!==": 4,
+    "<": 4,
+    ">": 4,
+    "<=": 4,
+    ">=": 4,
+    "+": 5,
+    "-": 5,
+    "^": 5,
+    "|": 5,
+    "*": 6,
+    "/": 6,
+    "÷": 6,
+    "%": 6,
+    "&": 6,
+    "<<": 7,
+    ">>": 7,
+    ">>>": 7,
+  }, generics.binaryOperatorPrecedence),
   BreakStatement({ label }, i) {
     return this.indent(i) + (label ? `@goto ${label.name}` : 'break')
   },
@@ -1027,6 +1069,12 @@ ${this.indent(i)}end\n`
       return this.toCode(argument, i) + this.toOperator(operator)
     }
   },
+  VariableDeclaration(ast, i) {
+    if (ast?.declarations.every(({ init }) => init === null)) {
+      return `local ${this.list(ast.declarations.map(({ id }) => id))}`
+    }
+    return generics.VariableDeclaration.call(this, ast, i)
+  },
   whileOpener: '',
 }
 Object.setPrototypeOf(Julia, generics)
@@ -1056,13 +1104,30 @@ const Lua = {
   AssignmentPattern(ast, i) {
     return this.toCode(ast.left, i)
   },
-  BinaryExpression(ast, i) {
+  BinaryExpression(ast, ...xs) {
     if (ast.operator === 'in') {
-      return `${this.toCode(ast.right, i, ast)}[${this.toCode(ast.left, i, ast)}] ~= nil`
+      return `${this.toCode(ast.right, ...xs)}[${this.toCode(ast.left, ...xs)}] ~= nil`
+    } else if (isFloorDivide(ast)) {
+      ast = { ...ast.left, operator: '//' }
+    } else if (isStringConcatenation(ast)) {
+      ast = { ...ast, operator: '..' }
     }
-    return generics.BinaryExpression.call(this, ast, i)
+    return generics.BinaryExpression.call(this, ast, ...xs)
   },
-  binaryOperatorPrecedence: Object.setPrototypeOf({ "in": 7 }, generics.binaryOperatorPrecedence),
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    // https://www.lua.org/manual/5.4/manual.html#3.4.8
+    "<": 3.5,
+    ">": 3.5,
+    "<=": 3.5,
+    ">=": 3.5,
+    "!=": 3.5,
+    "==": 3.5,
+    "!==": 3.5,
+    "===": 3.5,
+    "in": 3.5,
+    "..": 9.5,
+    "//": 11,
+  }, generics.binaryOperatorPrecedence),
   blockCloser: 'end',
   BlockStatement({ body }, i, blockOpen = this.blockOpen, blockClose = this.blockClose) {
     return `\n${this.body(body, i, blockOpen, blockClose)}\n${this.indent(i)}end`
@@ -1328,9 +1393,12 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
       case '||': case '??': return 'or'
       case '===': return '=='
       case '!=': case '!==': return '~='
+      case '>>': console.warn('Treating signed bitshift to unsigned')
+      case '>>>': return '>>'
       default: console.warn('Unknown operator ' + op)
-      case '+': case '-': case '*': case '/': case '==': case '<<': case '>>':
+      case '+': case '-': case '*': case '/': case '==': case '<<':
       case '<': case '>': case '<=': case '>=': case '%': case '=':
+      case '|': case '&': case '//': case '..':
         return op
     }
   },
@@ -1377,6 +1445,9 @@ ${this.indent(i + offset)}if not ${success}`
       return this.toCode(argument, i) + this.toOperator(operator)
     }
   },
+  VariableDeclarator({ id, init }, i) {
+    return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
+  },
   VariableDeclaration(ast, i) {
     return this.indent(i) + 'local ' + generics.VariableDeclaration.call(this, ast, i).trimStart()
   },
@@ -1414,6 +1485,26 @@ const Python = {
         return this.BinaryExpression(ast, i)
     }
   },
+  BinaryExpression(ast, ...xs) {
+    if (isFloorDivide(ast)) {
+      ast = { ...ast.left, operator: '//' }
+    }
+    return generics.BinaryExpression.call(this, ast, ...xs)
+  },
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    // https://docs.python.org/3/reference/expressions.html#operator-precedence
+    "in": 3.5,
+    "instanceof": 3.5,
+    "<": 3.5,
+    ">": 3.5,
+    "<=": 3.5,
+    ">=": 3.5,
+    "==": 3.5,
+    "!=": 3.5,
+    "===": 3.5,
+    "!==": 3.5,
+    "//": 11,
+  }, generics.binaryOperatorPrecedence),
   blockOpener: ':',
   blockCloser: '',
   blockClose() {
@@ -1608,6 +1699,17 @@ const Racket = {
   assignmentKeyword: 'set!',
   boolTrue: '#t',
   boolFalse: '#f',
+  BinaryExpression(ast, i) {
+    const { left, operator, right } = ast
+    if (operator === '==' || operator === '===') {
+      if (right.type === 'Literal' && right.value === 0) {
+        return `(zero? ${this.toCode(left, i)})`
+      }
+    } else if (isFloorDivide(ast)) {
+      return `(quotient ${this.toCode(left, i)} ${this.toCode(right, i)})`
+    }
+    return sexpr.BinaryExpression.call(this, ast, i)
+  },
   decrementFunction: 'sub1',
   ForStatement(ast, i) {
     if (isNumericalForStatement(ast)) {
@@ -1697,6 +1799,22 @@ const Ruby = {
   },
   blockOpener: '',
   blockCloser: 'end',
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    // https://ruby-doc.org/3.2.2/syntax/precedence_rdoc.html
+    "==": 3.5,
+    "!=": 3.5,
+    "===": 3.5,
+    "!==": 3.5,
+    "=~": 3.5,
+    "!~": 3.5,
+    "<": 4,
+    "<=": 4,
+    ">": 4,
+    ">=": 4,
+    "|": 5,
+    "in": 13,
+    "instanceof": 13,
+  }, generics.binaryOperatorPrecedence),
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.arguments.length === 0) {
       return this.toCode(ast.callee, i)
@@ -1753,12 +1871,18 @@ const Ruby = {
     return result.join('')
   },
   toOperator(operator) {
-    if (operator.startsWith('??')) {
-      return '||' + operator.slice(2)
+    switch (operator) {
+      case '??=': return '||='
+      case '??': return '||'
+      case '===': return '=='
+      case '!==': return '!='
+      case '>>>':
+        console.warn('Treating unsigned right bitshift as signed')
+        return '>>'
+      default: return operator
     }
-    return operator
   },
-  undefined: 'undef',
+  undefined: 'nil',
 }
 Object.setPrototypeOf(Ruby, generics)
 
