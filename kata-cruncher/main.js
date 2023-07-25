@@ -111,8 +111,9 @@ const generics = {
     const rhs = this.toCode(right ?? id, i)
     return this.toCode(left ?? id, i) + (rhs ? ' ' + this.toOperator(operator) + ' ' + rhs : '')
   },
-  BinaryExpression({ operator, left, right }) {
-    const result = [this.toCode(left), this.toOperator(operator), this.toCode(right)]
+  BinaryExpression(ast) {
+    const { operator, left, right } = ast
+    const result = [this.toCode(left), this.toOperator(operator, ast), this.toCode(right)]
     if (this.binaryExpressionNeedsParens(operator, left)) {
       result[0] = `(${result[0]})`
     }
@@ -210,7 +211,7 @@ const generics = {
   elseKeyword: 'else',
   functionKeyword: 'function',
   FunctionExpression(ast, i, keyword = ast.id ? this.functionKeyword : this.lambdaKeyword) {
-    const { async, body, generator, id, params } = ast
+    const { async, body, generator } = ast
     if (generator) {
       if (this.generatorKeyword) {
         keyword = this.generatorKeyword
@@ -225,12 +226,17 @@ const generics = {
         console.warn('Stripping async')
       }
     }
-    return `${keyword} ${id ? this.CallExpression({
-      type: 'CallExpression',
-      callee: id,
-      arguments: params
-    }) : `(${this.list(params)})`}${this.halfBlockOpener}
+    return `${keyword} ${this.functionExpressionCallExpression(ast, i)}${this.halfBlockOpener}
 ${this.body(body.body, i)}${this.blockClose(i)}`
+  },
+  functionExpressionCallExpression({ id, params }, i, ...xs) {
+    if (id === null) {
+      return this.params(params, i, ...xs)
+    } else if (this.params) {
+      return `${this.toCode(id)}(${this.params(params, i, ...xs)})`
+    } else {
+      return this.CallExpression({ callee: id, arguments: params }, i, ...xs)
+    }
   },
   halfBlockOpener: '',
   indent(depth = 0) {
@@ -403,11 +409,15 @@ const sexpr = {
       return `(${this.assignmentKeyword} ${lhs} (${this.toOperator(operator.slice(0, -1))} ${lhs} ${rhs}))`
     }
   },
-  BinaryExpression({ operator, left, right }, i) {
-    if (operator === '==' || operator === '===') {
-      return `(${right.type === 'Literal' && typeof right.value === 'number' ? '=' : 'equal?'} ${this.toCode(left, i)} ${this.toCode(right, i)})`
+  BinaryExpression(ast, i) {
+    const { left, operator, right } = ast
+    if (operator === '>>' || operator === '>>>') {
+      if (operator === '>>>') {
+        console.warn('Treating unsigned bitshift as signed')
+      }
+      return `(${this.shiftOperator} ${this.toCode(left, i)} ${right.type === 'Literal' && typeof right.value === 'number' ? -right.value : `(- ${this.toCode(right, i)})`})}`
     }
-    return `(${this.toOperator(operator)} ${this.toCode(left, i)} ${this.toCode(right, i)})`
+    return `(${this.toOperator(operator, ast)} ${this.toCode(left, i)} ${this.toCode(right, i)})`
   },
   BlockStatement(ast, i, ...xs) {
     if (ast.body.length === 1) {
@@ -489,6 +499,14 @@ const sexpr = {
     }
   },
   null: 'nil',
+  params(params, i) {
+    return params.map((ast) => {
+      if (ast.type.startsWith('Assignment')) {
+        return this.optionalParameter(ast, i)
+      }
+      return this.toCode(ast, i)
+    }).join(' ')
+  },
   RestElement({ argument }) {
     return `. ${this.toCode(argument)}`
   },
@@ -499,12 +517,34 @@ const sexpr = {
     return `(begin ${expressions.map((expr) => this.toCode(expr, i)).join(' ')})`
   },
   tabWidth: 1,
-  toOperator(op, i) {
-    switch (op) {
+  toOperator(operator) {
+    switch (operator) {
       case '&&': return 'and'
       case '||': case '??': return 'or'
+      case '&': return 'logand'
+      case '|': return 'logior'
+      case '^': return 'logxor'
+      case '~': return 'lognot'
+      case '!': return 'not'
+      case '<<': return this.shiftOperator
+      default: return operator
     }
-    return generics.toOperator.call(this, op, i)
+  },
+  UnaryExpression(ast, i) {
+    const { argument, operator } = ast
+    const arg = this.toCode(argument, i)
+    if ((operator === '+' || operator === '-') && typeof argument.value === 'number') {
+      return operator + arg
+    } else if (operator === '!' && argument.type === 'BinaryExpression') {
+      if (argument.operator === '&&') {
+        return `(nand ${this.toCode(argument.left, ast)} ${this.toCode(argument.right, ast)})`
+      } else if (argument.operator === '||') {
+        return `(nor ${this.toCode(argument.left, ast)} ${this.toCode(argument.right, ast)})`
+      }
+    } else if (operator === 'delete' || operator === 'typeof') {
+      abandon(ast, `No ${operator} in s-expr based languages`)
+    }
+    return `(${this.toOperator(operator)} ${arg})`
   },
   undefined: 'nil',
   UpdateExpression({ argument, operator }, i) {
@@ -527,6 +567,23 @@ const CommonLisp = {
   assignmentKeyword: 'setf',
   boolTrue: 't',
   boolFalse: 'nil',
+  BinaryExpression(ast, i) {
+    const { left, operator, right } = ast
+    if (operator === '==' || operator === '===') {
+      if (right.type === 'Literal' && right.value === 0) {
+        return `(zerop ${this.toCode(left, i)})`
+      }
+    } else if (isFloorDivide(ast)) {
+      return this.CallExpression({
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'floor' },
+        arguments: [left.left, left.right]
+      })
+    } else if (operator === '!=' || operator === '!==') {
+      return `(not ${this.toCode(not(ast), i)})`
+    }
+    return sexpr.BinaryExpression.call(this, ast, i)
+  },
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert') {
       const lhs = this.toCode(ast.arguments[0])
@@ -575,8 +632,17 @@ const CommonLisp = {
     }
   },
   functionKeyword: '(defun',
+  functionExpressionCallExpression({ id, params }, i, ...xs) {
+    if (id === null) {
+      return `(${this.params(params, i, ...xs)})`
+    }
+    return `${this.toCode(id)} (${this.params(params, i, ...xs)})`
+  },
   ObjectExpression({ properties }, i) {
     return (properties.every(this.isQuoteable.bind(this)) ? "'(" : '(list ') + this.list(properties, i) + ')'
+  },
+  optionalParameter({ left, right }, i) {
+    return `&optional (${this.toCode(left, i)} ${this.toCode(right, i)})`
   },
   Property({ key, value }, i) {
     return `(${this.toCode(key, i)} . ${this.toCode(value, i)})`
@@ -584,12 +650,17 @@ const CommonLisp = {
   RestElement({ argument }) {
     return `&rest ${this.toCode(argument)}`
   },
-  toOperator(op, i) {
-    switch (op) {
-      case '==': return 'equal'
-      case '===': return 'eql'
+  shiftOperator: 'ash',
+  toOperator(operator, i) {
+    if (operator === '===' && ((parent?.left?.type === 'Literal' && typeof parent.left.value === 'number') ||
+      (parent?.right?.type === 'Literal' && typeof parent.right.value === 'number'))) {
+      return '='
+    } else if (operator === '==') {
+      return 'equal'
+    } else if (operator === '===') {
+      return 'eql'
     }
-    return sexpr.toOperator.call(this, op, i)
+    return sexpr.toOperator.call(this, operator, i)
   },
   undefined: 'nil',
   UpdateExpression({ argument, operator, prefix }, i) {
@@ -1706,7 +1777,11 @@ const Racket = {
         return `(zero? ${this.toCode(left, i)})`
       }
     } else if (isFloorDivide(ast)) {
-      return `(quotient ${this.toCode(left, i)} ${this.toCode(right, i)})`
+      return this.CallExpression({
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'quotient' },
+        arguments: [left.left, left.right]
+      })
     }
     return sexpr.BinaryExpression.call(this, ast, i)
   },
@@ -1745,10 +1820,19 @@ ${this.indent(i + 4)}(${this.test(not(ast.test))})${this.toCode(ast.body, i + 1)
         body = body.body[0]
       }
     }
-    return generics.FunctionExpression.call(this, ast, i)
+    return sexpr.FunctionExpression.call(this, ast, i)
+  },
+  functionExpressionCallExpression({ id, params }, i, ...xs) {
+    if (id === null) {
+      return `(${this.params(params, i, ...xs)})`
+    }
+    return `(${this.toCode(id)} ${this.params(params, i, ...xs)})`
   },
   generatorKeyword: '(generator',
   incrementFunction: 'add1',
+  optionalParameter({ left, right }, i) {
+    return `(${this.toCode(left, i)} ${this.toCode(right, i)})`
+  },
   RegExpLiteral(ast) {
     const { pattern, flags } = ast
     if (flags) {
@@ -1756,16 +1840,23 @@ ${this.indent(i + 4)}(${this.test(not(ast.test))})${this.toCode(ast.body, i + 1)
     }
     return `#px"${pattern}"`
   },
+  shiftOperator: 'arithmetic-shift',
   tabWidth: 1,
   ThrowStatement({ argument }, i) {
     return `${this.indent(i)}(error ${this.toCode(argument, i)})`
   },
-  toOperator(op) {
-    switch (op) {
+  toOperator(operator, parent) {
+    if (operator === '===' && ((parent?.left?.type === 'Literal' && typeof parent.left.value === 'number') ||
+      (parent?.right?.type === 'Literal' && typeof parent.right.value === 'number'))) {
+      return '='
+    }
+    switch (operator) {
       case '==': return 'equal?'
       case '===': return 'eq?'
+      case '!=': return '(negate equal?)'
+      case '!==': return '(negate eq?)'
     }
-    return sexpr.toOperator.call(this, op)
+    return sexpr.toOperator.call(this, operator)
   },
   TryStatement({ block, handler, finalizer }, i) {
     let result = `(with-handlers ([exn:fail?`
