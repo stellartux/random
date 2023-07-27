@@ -10,6 +10,20 @@ function abandon(ast, reason = 'Something went wrong') {
   throw new AbandonError(reason)
 }
 
+function implicitReturn(ast) {
+  while (ast.body?.length === 1 && ast.body?.body?.type === 'BlockStatement') {
+    ast.body = ast.body.body
+  }
+  const body = ast.body?.body
+  const lastIndex = body?.length - 1
+  if (body?.[lastIndex].type === 'ReturnStatement') {
+    body[lastIndex].type = 'ExpressionStatement'
+    body[lastIndex].expression = body[lastIndex].argument
+    delete body[lastIndex].argument
+  }
+  return ast
+}
+
 function isFloorDivide({ operator, left, right, type }) {
   return type === 'BinaryExpression' && operator === '|'
     && right.type === 'Literal' && right.value === 0
@@ -79,6 +93,26 @@ function not(ast) {
   }
 }
 
+function updateExpressionToAssignmentExpression({ argument, operator, prefix }) {
+  const right = { type: 'Literal', raw: '1', value: 1 }
+  const result = {
+    type: 'AssignmentExpression',
+    left: argument,
+    operator: operator[0] + '=',
+    right,
+  }
+  if (prefix) {
+    return result
+  } else {
+    return {
+      type: 'BinaryExpression',
+      left: result,
+      operator: operator === '++' ? '-' : '+',
+      right
+    }
+  }
+}
+
 // see https://github.com/estree/estree/tree/master
 
 const generics = {
@@ -123,8 +157,7 @@ const generics = {
     return result.join(' ')
   },
   binaryExpressionNeedsParens(parentOperator, ast) {
-    return ast && ast.type === 'BinaryExpression' &&
-      this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[ast.operator]
+    return ast && this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[ast.operator]
   },
   binaryOperatorPrecedence: {
     ",": 0,
@@ -201,6 +234,9 @@ const generics = {
   DebuggerStatement() {
     console.warn('Skipping debugger statement')
   },
+  EmptyStatement() {
+    return ';'
+  },
   ExpressionStatement({ expression }, i) {
     return this.indent(i) + this.toCode(expression, i)
   },
@@ -227,7 +263,7 @@ const generics = {
       }
     }
     return `${keyword} ${this.functionExpressionCallExpression(ast, i)}${this.halfBlockOpener}
-${this.body(body.body, i)}${this.blockClose(i)}`
+${this.body(body.body, i, ast)}${this.blockClose(i)}`
   },
   functionExpressionCallExpression({ id, params }, i, ...xs) {
     if (id === null) {
@@ -323,6 +359,9 @@ ${this.body(body.body, i)}${this.blockClose(i)}`
       return `{\n${ind}${props.join(',\n' + this.indent(i + 1))}${'\n' + this.indent(i)}}`
     }
   },
+  params(params, i) {
+    return this.list(params, i)
+  },
   PrivateIdentifier(ast) {
     return this.Identifier(ast)
   },
@@ -361,15 +400,15 @@ ${this.body(body.body, i)}${this.blockClose(i)}`
   toOperator: identity,
   UnaryExpression({ argument, operator, prefix }, i) {
     if (prefix) {
-      return operator + this.toCode(argument, i)
+      return this.toOperator(operator) + this.toCode(argument, i)
     } else {
-      return this.toCode(argument, i) + operator
+      return this.toCode(argument, i) + this.toOperator(operator)
     }
   },
   undefined: 'undefined',
   UpdateExpression({ argument, operator, prefix }, i) {
     if (prefix) {
-      return this.indent(i) + this.toOperator(operator) + this.toCode(argument)
+      return this.toOperator(operator) + this.toCode(argument, i)
     } else {
       return this.toCode(argument, i) + this.toOperator(operator)
     }
@@ -415,7 +454,7 @@ const sexpr = {
       if (operator === '>>>') {
         console.warn('Treating unsigned bitshift as signed')
       }
-      return `(${this.shiftOperator} ${this.toCode(left, i)} ${right.type === 'Literal' && typeof right.value === 'number' ? -right.value : `(- ${this.toCode(right, i)})`})}`
+      return `(${this.shiftOperator} ${this.toCode(left, i)} ${right.type === 'Literal' && typeof right.value === 'number' ? -right.value : `(- ${this.toCode(right, i)})`})`
     }
     return `(${this.toOperator(operator, ast)} ${this.toCode(left, i)} ${this.toCode(right, i)})`
   },
@@ -443,6 +482,12 @@ const sexpr = {
       alternate = alternate.body[0]
     }
     return this.IfExpression(ast)
+  },
+  EmptyStatement() {
+    return '(begin)'
+  },
+  FunctionExpression(ast, ...xs) {
+    return generics.FunctionExpression.call(this, implicitReturn(ast), ...xs)
   },
   halfBlockOpener: '',
   Identifier({ name }) {
@@ -499,14 +544,6 @@ const sexpr = {
     }
   },
   null: 'nil',
-  params(params, i) {
-    return params.map((ast) => {
-      if (ast.type.startsWith('Assignment')) {
-        return this.optionalParameter(ast, i)
-      }
-      return this.toCode(ast, i)
-    }).join(' ')
-  },
   RestElement({ argument }) {
     return `. ${this.toCode(argument)}`
   },
@@ -517,6 +554,9 @@ const sexpr = {
     return `(begin ${expressions.map((expr) => this.toCode(expr, i)).join(' ')})`
   },
   tabWidth: 1,
+  ThrowStatement({ argument }, i) {
+    return `${this.indent(i)}(error ${this.toCode(argument, i)})`
+  },
   toOperator(operator) {
     switch (operator) {
       case '&&': return 'and'
@@ -547,9 +587,14 @@ const sexpr = {
     return `(${this.toOperator(operator)} ${arg})`
   },
   undefined: 'nil',
-  UpdateExpression({ argument, operator }, i) {
-    const id = this.toCode(argument)
-    return `(${this.assignmentKeyword} ${id} (${operator === '++' ? this.incrementFunction : this.decrementFunction} ${id}))`
+  UpdateExpression({ argument, operator, prefix }, i) {
+    const id = this.toCode(argument, i)
+    const result = `(${this.assignmentKeyword} ${id} (${operator === '++' ? this.incrementFunction : this.decrementFunction} ${id}))`
+    if (prefix) {
+      return result
+    } else {
+      return `(${operator === '++' ? this.decrementFunction : this.incrementFunction} ${result})`
+    }
   },
   VariableDeclarator({ id, init }, i) {
     return this.toCode(id, i) + (init ? ' ' + this.toCode(init) : '')
@@ -664,12 +709,11 @@ const CommonLisp = {
   },
   undefined: 'nil',
   UpdateExpression({ argument, operator, prefix }, i) {
-    if (operator === '++' || operator === '--') {
-      return `(${operator == '++' ? 'in' : 'de'}cf ${this.toCode(argument, i)})`
-    } else if (prefix) {
-      return this.toOperator(operator) + this.toCode(argument, i)
+    const result = `(${operator == '++' ? 'in' : 'de'}cf ${this.toCode(argument, i)})`
+    if (prefix) {
+      return result
     } else {
-      return this.toCode(argument, i) + this.toOperator(operator)
+      return `(1${operator === '++' ? '-' : '+'} ${result})`
     }
   },
   variableDeclarationKeyword: 'defparameter',
@@ -684,6 +728,18 @@ const JavaScript = {
     return `(${this.list(params)}) => ${this.toCode(body, i)}`
   },
   asyncKeyword: 'async ',
+  binaryExpressionNeedsParens(parentOperator, ast) {
+    if (ast) {
+      const { operator } = ast
+      const parentPrecedence = this.binaryOperatorPrecedence[parentOperator]
+      const operatorPrecedence = this.binaryOperatorPrecedence[operator]
+      if (parentPrecedence === operatorPrecedence) {
+        return operator !== parentOperator
+      } else {
+        return parentPrecedence > operatorPrecedence
+      }
+    }
+  },
   BreakStatement({ label }, i) {
     return this.indent(i) + 'break' + (label ? ' ' + label.name : '')
   },
@@ -782,6 +838,13 @@ ${this.indent(i)}}
   Super() {
     return 'super'
   },
+  SwitchCase({ test, consequent }, i) {
+    return `${this.indent(i)}${test ? 'case ' + this.toCode(test, i) : 'default'}:
+${this.list(consequent, i + 1, '\n')}`
+  },
+  SwitchStatement({ cases, discriminant, }, i) {
+    return `${this.indent(i)}switch (${this.toCode(discriminant)}) {\n${this.list(cases, i + 1, '\n')}\n${this.indent(i)}}`
+  },
   test(ast, i) {
     return `(${this.toCode(ast, i)})`
   },
@@ -824,8 +887,8 @@ ${this.indent(i)}}
 Object.setPrototypeOf(JavaScript, generics)
 
 const Julia = {
-  ArrowFunctionExpression({ body, params = [] }, i = 0) {
-    return `(${params.map(x => this.toCode(x))}) -> ${this.toCode(body, i)} `
+  ArrowFunctionExpression({ body, params }, i) {
+    return `(${this.params(params)}) -> ${implicitReturn(this.toCode(body, i))} `
   },
   AssignmentExpression(ast, i) {
     if (ast.operator === '??=') {
@@ -833,6 +896,9 @@ const Julia = {
       return `${left} = something(${left}, ${this.toCode(ast.right, i)})`
     }
     return generics.AssignmentExpression.call(this, ast, i)
+  },
+  AssignmentPattern({ left, right }) {
+    return this.toCode(left) + '=' + this.toCode(right)
   },
   blockOpener: 'begin',
   blockCloser: 'end',
@@ -1000,19 +1066,13 @@ ${this.indent(i)}end\n`
     abandon(ast, 'Unimplemented: ForStatement')
   },
   ForInStatement({ body, left, right }, i) {
-    return `for ${this.toCode(left, i)} in eachindex(${this.toCode(right, i)}) ${this.toCode(body, i, '')}`
+    return `for ${this.list(left.declarations.map(({ id }) => id), i)} in eachindex(${this.toCode(right, i)}) ${this.toCode(body, i, '')}`
   },
   ForOfStatement({ body, left, right }, i) {
-    return `for ${this.toCode(left, i)} in ${this.toCode(right, i)} ${this.toCode(body, i, '')}`
+    return `for ${this.list(left.declarations.map(({ id }) => id), i)} in ${this.toCode(right, i)} ${this.toCode(body, i, '')}`
   },
   FunctionDeclaration(ast, i) {
-    const body = ast.body.body
-    const lastIndex = body.length - 1
-    if (body[lastIndex].type === 'ReturnStatement') {
-      body[lastIndex].type = 'ExpressionStatement'
-      body[lastIndex].expression = body[lastIndex].argument
-    }
-    return generics.FunctionDeclaration.call(this, ast, i)
+    return generics.FunctionDeclaration.call(this, implicitReturn(ast), i)
   },
   halfBlockOpener: '',
   Identifier({ name }) {
@@ -1107,12 +1167,14 @@ ${this.indent(i)}end\n`
   ThrowStatement({ argument }, i) {
     return `${this.indent(i)}throw(${this.toCode(argument, i)})`
   },
-  toOperator(op) {
-    switch (op) {
+  toOperator(operator) {
+    switch (operator) {
       case '**': return '^'
       case '^': return '⊻'
       case '===': return '=='
-      default: return op
+      case '!==': return '!='
+      case 'instanceof': return 'isa'
+      default: return operator
     }
   },
   TryStatement({ block, handler, finalizer }, i) {
@@ -1131,14 +1193,8 @@ ${this.indent(i)}end\n`
     return result
   },
   undefined: 'nothing',
-  UpdateExpression({ argument, operator, prefix }, i) {
-    if (operator === '++' || operator === '--') {
-      return this.toCode(argument, i) + ' ' + operator[0] + '= 1'
-    } else if (prefix) {
-      return this.toOperator(operator) + this.toCode(argument, i)
-    } else {
-      return this.toCode(argument, i) + this.toOperator(operator)
-    }
+  UpdateExpression(ast, i) {
+    return this.toCode(updateExpressionToAssignmentExpression(ast), i)
   },
   VariableDeclaration(ast, i) {
     if (ast?.declarations.every(({ init }) => init === null)) {
@@ -1464,7 +1520,7 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
       case '||': case '??': return 'or'
       case '===': return '=='
       case '!=': case '!==': return '~='
-      case '>>': console.warn('Treating signed bitshift to unsigned')
+      case '>>': console.warn('Treating signed bitshift as unsigned')
       case '>>>': return '>>'
       default: console.warn('Unknown operator ' + op)
       case '+': case '-': case '*': case '/': case '==': case '<<':
@@ -1506,15 +1562,12 @@ ${this.indent(i + offset)}if not ${success}`
       return generics.UnaryExpression.call(this, ast)
     }
   },
-  UpdateExpression({ argument, operator, prefix }, i) {
-    if (operator === '++' || operator === '--') {
-      const arg = this.toCode(argument, i)
-      return `${arg} = ${arg} ${operator[0]} 1`
-    } else if (prefix) {
-      return this.toOperator(operator) + this.toCode(argument, i)
-    } else {
-      return this.toCode(argument, i) + this.toOperator(operator)
+  UpdateExpression(ast, i) {
+    if (!ast.prefix) {
+      console.warn('Treating postfix UpdateExpression as prefix')
+      ast = { ...ast, prefix: true }
     }
+    return this.toCode(updateExpressionToAssignmentExpression(ast), i)
   },
   VariableDeclarator({ id, init }, i) {
     return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
@@ -1711,7 +1764,7 @@ ${this.indent(i)}`
     }
     return `r"${pattern.replace(/"/g, '\\"').replace(/\\\//g, '/')}"`
   },
-  RestElement() {
+  RestElement({ argument }) {
     return `*${this.toCode(argument)}`
   },
   SequenceExpression(ast, i) {
@@ -1731,8 +1784,8 @@ ${this.indent(i)}`
   },
   tabWidth: 4,
   throwKeyword: 'raise',
-  toOperator(op) {
-    switch (op) {
+  toOperator(operator) {
+    switch (operator) {
       case 'delete': return 'del'
       case '!': return 'not '
       case '&&': return 'and'
@@ -1740,9 +1793,9 @@ ${this.indent(i)}`
       case '===': return '=='
       case '!==': return '!='
       case '>>>':
-        console.warn('Converting unsigned right bitshift to signed')
+        console.warn('Treating unsigned bitshift as signed')
         return '>>'
-      default: return op
+      default: return operator
     }
   },
   TryStatement({ block, handler, finalizer }, i) {
@@ -1761,7 +1814,9 @@ ${this.indent(i)}`
     return result
   },
   undefined: 'None',
-  UpdateExpression: Julia.UpdateExpression,
+  UpdateExpression(...xs) {
+    return Lua.UpdateExpression.call(this, ...xs)
+  },
   whileOpener: '',
 }
 Object.setPrototypeOf(Python, generics)
@@ -1842,9 +1897,6 @@ ${this.indent(i + 4)}(${this.test(not(ast.test))})${this.toCode(ast.body, i + 1)
   },
   shiftOperator: 'arithmetic-shift',
   tabWidth: 1,
-  ThrowStatement({ argument }, i) {
-    return `${this.indent(i)}(error ${this.toCode(argument, i)})`
-  },
   toOperator(operator, parent) {
     if (operator === '===' && ((parent?.left?.type === 'Literal' && typeof parent.left.value === 'number') ||
       (parent?.right?.type === 'Literal' && typeof parent.right.value === 'number'))) {
@@ -1968,12 +2020,15 @@ const Ruby = {
       case '===': return '=='
       case '!==': return '!='
       case '>>>':
-        console.warn('Treating unsigned right bitshift as signed')
+        console.warn('Treating unsigned bitshift as signed')
         return '>>'
       default: return operator
     }
   },
   undefined: 'nil',
+  UpdateExpression(...xs) {
+    return Lua.UpdateExpression.call(this, ...xs)
+  },
 }
 Object.setPrototypeOf(Ruby, generics)
 
