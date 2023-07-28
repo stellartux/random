@@ -72,6 +72,7 @@ describe("the function", function(){
       <option>JavaScript</option>
       <option selected>Julia</option>
       <option>Lua</option>
+      <option>Nim</option>
       <option>Python</option>
       <option>Racket</option>
       <option>Ruby</option>
@@ -205,8 +206,7 @@ describe("the function", function(){
     })
 
     function normalize(ast) {
-      if (!ast) return
-      switch (ast.type) {
+      switch (ast?.type) {
         case 'ArrowFunctionExpression':
         case 'FunctionExpression':
           normalize(ast.id)
@@ -328,8 +328,6 @@ describe("the function", function(){
       JavaScript: "const assert = require('chai').assert\n\n",
       Julia: 'using FactCheck\n\n',
       Lua: 'local SOLUTION = require "solution"\n\n',
-      Racket: '',
-      Ruby: '',
     }
 
     /**
@@ -345,7 +343,7 @@ describe("the function", function(){
         outputLanguage = 'JavaScript',
         showPreamble = false,
       } = typeof (options) === 'object' ? options : { outputLanguage: options }
-      return (showPreamble ? preamble[outputLanguage] : '') +
+      return (showPreamble && preamble[outputLanguage] || '') +
         to[outputLanguage](normalize(from[inputLanguage](input)))
     }
 

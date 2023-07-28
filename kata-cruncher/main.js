@@ -3,11 +3,17 @@ import { parse } from 'https://cdn.skypack.dev/pin/espree@v9.6.1-Wxp29AG7hjpUOCb
 
 const identity = (x) => x
 
+Array.prototype.toSorted ??= function (...xs) { return this.slice().sort(...xs) }
+
 export class AbandonError extends Error { }
 
 function abandon(ast, reason = 'Something went wrong') {
   console.dir(ast)
   throw new AbandonError(reason)
+}
+
+function implicitBreak(ast) {
+
 }
 
 function implicitReturn(ast) {
@@ -91,6 +97,23 @@ function not(ast) {
     operator: '!',
     argument: ast
   }
+}
+
+/**
+ * Converts a SwitchStatement to the equivalent IfStatement, if possible.
+ * @return {object|null} 
+ **/
+function switchStatementToIfStatement({ cases, discriminant }) {
+  if (/(^MemberExpression|Identifier|Literal)$/.test(discriminant.type)
+    && cases?.slice(0, -1).every(({ consequent }) => {
+      const finalStatement = consequent.at(-1)
+      return finalStatement === undefined
+        || finalStatement.type === 'ReturnStatement'
+        || finalStatement.type === 'BreakStatement'
+    })) {
+    // todo
+  }
+  return null
 }
 
 function updateExpressionToAssignmentExpression({ argument, operator, prefix }) {
@@ -325,9 +348,14 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   list(list, i = 0, separator = ', ') {
     return list ? list.map(x => this.toCode(x, i)).join(separator) : ''
   },
-  Literal({ raw, value, regex }) {
+  Literal(ast) {
+    const { raw, value, regex } = ast
     if (regex) {
-      return this.RegExpLiteral(regex)
+      if (this.RegExpLiteral) {
+        return this.RegExpLiteral(regex)
+      } else {
+        abandon(ast, 'RegExp not supported.')
+      }
     } else if (typeof value === 'boolean') {
       return value ? this.boolTrue : this.boolFalse
     } else if (typeof value === 'string') {
@@ -371,11 +399,19 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   Program({ body }) {
     return body.map(x => this.toCode(x, 0)).join('\n')
   },
-  RegExpLiteral({ pattern, flags }) {
-    return `/${pattern}/${flags}`
-  },
   ReturnStatement({ argument }, i) {
     return this.indent(i) + 'return ' + this.toCode(argument, i)
+  },
+  SpreadElement(ast) {
+    return this.RestElement(ast)
+  },
+  SwitchStatement(ast, i) {
+    let ifStmt = switchStatementToIfStatement(ast)
+    if (ifStmt) {
+      return this.toCode(ifStmt, i)
+    } else {
+      abandon(ast, 'Could not convert SwitchStatement to IfStatement')
+    }
   },
   tabWidth: 2,
   test(ast, i) {
@@ -695,6 +731,9 @@ const CommonLisp = {
   RestElement({ argument }) {
     return `&rest ${this.toCode(argument)}`
   },
+  ReturnStatement(ast, i) {
+    console.dir(ast)
+  },
   shiftOperator: 'ash',
   toOperator(operator, i) {
     if (operator === '===' && ((parent?.left?.type === 'Literal' && typeof parent.left.value === 'number') ||
@@ -825,6 +864,9 @@ ${this.indent(i)}}
       result += ' = ' + this.toCode(value)
     }
     return result
+  },
+  RegExpLiteral({ pattern, flags }) {
+    return `/${pattern}/${flags}`
   },
   RestElement({ argument }) {
     return `...${this.toCode(argument)}`
@@ -1522,10 +1564,11 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
       case '!=': case '!==': return '~='
       case '>>': console.warn('Treating signed bitshift as unsigned')
       case '>>>': return '>>'
+      case 'void': return ''
       default: console.warn('Unknown operator ' + op)
       case '+': case '-': case '*': case '/': case '==': case '<<':
       case '<': case '>': case '<=': case '>=': case '%': case '=':
-      case '|': case '&': case '//': case '..':
+      case '|': case '&': case '//': case '..': case '~':
         return op
     }
   },
@@ -1579,7 +1622,253 @@ ${this.indent(i + offset)}if not ${success}`
 }
 Object.setPrototypeOf(Lua, generics)
 
-const Python = {
+const Nim = Object.setPrototypeOf({
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    '|': 3,
+    '^': 3,
+    '&': 4,
+    '==': 5,
+    '!=': 5,
+    '===': 5,
+    '!==': 5,
+    '<': 5,
+    '>': 5,
+    '<=': 5,
+    '>=': 5,
+    'in': 5,
+    'instanceof': 5,
+    '!': 5,
+    '+': 8,
+    '-': 8,
+    '*': 9,
+    '/': 9,
+    'div': 9,
+    'mod': 9,
+    '%': 9,
+  }, generics.binaryOperatorPrecedence),
+  BinaryExpression(ast, ...xs) {
+    if (ast.operator === '**') {
+      abandon(ast, `Nim: operator ${ast.operator} not supported.`)
+    }
+    return generics.BinaryExpression.call(this, ast, ...xs)
+  },
+  blockClose() {
+    return ''
+  },
+  blockCloser: '',
+  blockOpener: ':',
+  BreakStatement(ast, i) {
+    if (ast.argument) {
+      abandon(ast, "No labels in Nim.")
+    }
+    return `${this.indent(i)}break`
+  },
+  ClassBody({ body }, i, name) {
+    return body.toSorted((a, b) => a > b).map((stmt) => this.toCode(stmt, i, name)).join('\n')
+  },
+  ClassDeclaration({ body, id, superClass }, i) {
+    const name = this.toCode(id)
+    return `${this.indent(i)}type
+${this.indent(i + 1)}${name} = ${superClass ? `ref object of ${this.toCode(superClass)}` : 'object'}${this.toCode(body, i, name)}
+`
+  },
+  ContinueStatement(ast, i) {
+    if (ast.argument) {
+      abandon(ast, "No labels in Nim.")
+    }
+    return `${this.indent(i)}continue`
+  },
+  elseKeyword: 'else:',
+  elseIfKeyword: 'elif',
+  ForOfStatement({ body, left, right }, i) {
+    return `for ${this.list(left.declarations.map(({ id }) => id))} in ${this.toCode(right, i)}${this.toCode(body, i)}`
+  },
+  functionExpressionCallExpression({ id, params }) {
+    if (params.length === 0) {
+      return `${this.toCode(id)}(): auto =`
+    } else {
+      return `${this.toCode(id)}(${this.params(params)}): auto =`
+    }
+  },
+  functionKeyword: 'proc',
+  generatorKeyword: 'iterator',
+  halfBlockOpener: '',
+  Identifier({ name }) {
+    return {
+      'Error': 'newException',
+      'length': 'len',
+    }[name] ?? name
+  },
+  inferType(literal) {
+    if (!literal) return null
+    switch (typeof literal.value) {
+      case 'boolean':
+        return 'bool'
+      case 'function':
+        return 'proc'
+      case 'number':
+        return Number.isInteger(literal.value) ? 'int' : 'float'
+      case 'string':
+        return 'string'
+      default:
+        return 'auto'
+    }
+  },
+  lambdaKeyword: 'proc',
+  MemberExpression(ast, ...xs) {
+    if (ast.object.name === 'console') {
+      if (ast.property.name === 'log') {
+        return 'echo'
+      }
+    }
+    return generics.MemberExpression.call(this, ast, ...xs)
+  },
+  MethodDefinition(ast, i, inferredType) {
+    const { computed, key, kind, value } = ast
+    if (ast.static) {
+      abandon(ast, 'No static methods in Nim.')
+    } else if (computed) {
+      abandon(ast, 'No computed methods in Nim.')
+    }
+    const result = {
+      ...value,
+      id: key,
+    }
+    result.params.unshift({ type: 'ThisExpression', inferredType })
+    if (kind === 'method') {
+      return `${this.indent(i)}${this.FunctionDeclaration(result, i)}`
+    }
+  },
+  NewExpression(...xs) {
+    return this.CallExpression(...xs)
+  },
+  params(params) {
+    return params.map((param) => {
+      if (param.type.endsWith('Identifier')) {
+        return param.name + ': auto'
+      } else if (param.type.startsWith('Assignment')) {
+        return `${param.left.name}: ${this.inferType(param.right)} = ${this.toCode(param.right)}`
+      } else if (param.type === 'RestElement') {
+        return this.RestElement(param)
+      } else if (param.type === 'ThisExpression') {
+        return `self: ${param.inferredType ?? 'auto'}`
+      } else {
+        abandon(param, `Unimplemented parameter type: ${param.type}`)
+      }
+    }).join(', ')
+  },
+  PropertyDefinition(ast, i) {
+    const { computed, key, value } = ast
+    if (ast.static) {
+      abandon(ast, 'No static properties in Nim.')
+    } else if (computed) {
+      abandon(ast, 'No computed properties in Nim.')
+    }
+    if (value) {
+      return `${this.indent(i + 2)}${this.toCode(key)}*: ${this.inferType(value)}`
+    }
+  },
+  RegExpLiteral({ flags, pattern }) {
+    if (flags) {
+      return `re("${pattern}", "${flags}")`
+    } else {
+      return `re"${pattern}"`
+    }
+  },
+  RestElement({ argument }) {
+    return `${this.toCode(argument)}: varargs`
+  },
+  SpreadElement(ast) {
+    abandon(ast, 'Spread operator not supported in Nim.')
+  },
+  SwitchCase({ consequent, test }, i) {
+    const result = [this.indent(i)]
+    if (test) {
+      result.push(`of ${this.test(test, i)}\n`)
+    } else {
+      result.push('else:\n')
+    }
+    if (consequent.at(-1)?.type === 'BreakStatement') {
+      consequent = consequent.slice(0, -1)
+    }
+    result.push(this.list(consequent, i + 1, '\n'))
+    return result.join('')
+  },
+  SwitchStatement({ cases, discriminant }, i) {
+    // todo: validate no fallthrough in cases
+    return `case ${this.toCode(discriminant, i)}\n${this.list(cases, i, '\n')}`
+  },
+  test(ast, i) {
+    return this.toCode(ast, i) + ':'
+  },
+  ThisExpression() {
+    return 'self'
+  },
+  throwKeyword: 'raise',
+  toOperator(operator) {
+    switch (operator) {
+      case 'void': return 'discard '
+      case '%': return 'mod'
+      case '||': case '??': return 'or'
+      case '&&': return 'and'
+      case '!': return 'not '
+      case 'instanceof': return 'is'
+      case '<<': return 'shl'
+      case '>>>': console.warn('Treating unsigned shift as signed')
+      case '>>': return 'shr'
+      case '===': return '=='
+      case '!==': return '!='
+    }
+    return operator
+  },
+  TryStatement({ block, handler, finalizer }, i) {
+    let result = `${this.indent(i)}try${this.toCode(block, i, ':', '')}`
+    if (handler) {
+      result += `\n${this.indent(i)}except`
+      if (handler.param) {
+        result += ` Exception as ${this.toCode(handler.param)}`
+      }
+      result += this.toCode(handler.body, i, ':', '')
+    }
+    if (finalizer) {
+      result += `\nfinally${this.toCode(finalizer, i, ':', '')}`
+    }
+    return result
+  },
+  UnaryExpression(ast, i) {
+    const { operator, argument } = ast
+    if (operator === 'typeof') {
+      return `typeof(${this.toCode(argument, i)})`
+    } else if (operator === 'delete') {
+      abandon(ast, 'No delete operator in Nim.')
+    }
+    return generics.UnaryExpression.call(this, ast, i)
+  },
+  UpdateExpression(...xs) {
+    return Lua.UpdateExpression.call(this, ...xs)
+  },
+  VariableDeclarator({ id, init }, i) {
+    return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
+  },
+  VariableDeclaration({ kind, declarations }, i) {
+    if (kind === 'let') {
+      kind = 'var'
+    } else if (kind === 'const') {
+      kind = 'let'
+    }
+    return `${this.indent(i)}${kind}${declarations.length > 1 ? `\n${this.indent(i + 1)}` : ' '}${this.list(declarations, i + 1, `\n${this.indent(i + 1)}`)}`
+  },
+  whileOpener: '',
+  YieldExpression(ast) {
+    const { delegate, argument } = ast
+    if (delegate) {
+      abandon(ast, 'No yield* in Nim')
+    }
+    return `yield ${this.toCode(argument)}`
+  }
+}, generics)
+
+const Python = Object.setPrototypeOf({
   ArrowFunctionExpression({ body, params }) {
     if (body.type === 'BlockStatement') {
       if (body.body.length === 1 && body.body[0].type === 'ReturnStatement') {
@@ -1818,8 +2107,7 @@ ${this.indent(i)}`
     return Lua.UpdateExpression.call(this, ...xs)
   },
   whileOpener: '',
-}
-Object.setPrototypeOf(Python, generics)
+}, generics)
 
 const Racket = {
   assignmentKeyword: 'set!',
@@ -1932,7 +2220,7 @@ ${this.body(body.body, i)})`
 }
 Object.setPrototypeOf(Racket, sexpr)
 
-const Ruby = {
+const Ruby = Object.setPrototypeOf({
   ArrowFunctionExpression({ body, expression, params }, i) {
     if (expression) {
       return `{ |${this.list(params, i)}| ${this.toCode(body, i)} }`
@@ -1981,6 +2269,9 @@ const Ruby = {
   },
   elseIfKeyword: 'elsif',
   functionKeyword: 'def',
+  FunctionDeclaration(...xs) {
+    return Julia.FunctionDeclaration.call(this, ...xs)
+  },
   lambdaKeyword: 'do',
   MemberExpression(ast, i) {
     if (ast.object?.name === 'console') {
@@ -2013,6 +2304,21 @@ const Ruby = {
     }
     return result.join('')
   },
+  RegExpLiteral(ast) {
+    return JavaScript.RegExpLiteral.call(this, ast)
+  },
+  RestElement({ argument }) {
+    return `*${this.toCode(argument)}`
+  },
+  ThrowStatement({ argument }, i) {
+    if (!argument) {
+      return `${this.indent(i)}raise`
+    } else if (/(Call|New)Expression/.test(argument.type)) {
+      return `${this.indent(i)}raise ${this.toCode(argument.callee)}, ${this.list(argument.arguments)}`
+    } else {
+      return `${this.indent(i)}raise ${this.toCode(argument)}`
+    }
+  },
   toOperator(operator) {
     switch (operator) {
       case '??=': return '||='
@@ -2029,8 +2335,7 @@ const Ruby = {
   UpdateExpression(...xs) {
     return Lua.UpdateExpression.call(this, ...xs)
   },
-}
-Object.setPrototypeOf(Ruby, generics)
+}, generics)
 
 /** @param {string} str */
 function toCamelCase(str) {
@@ -2055,7 +2360,7 @@ function toTitleCase(str) {
   return str[0].toUpperCase() + str.slice(1).replace(/\W./g, (x) => x[1].toUpperCase())
 }
 
-export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Python, Racket, Ruby }
+export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Nim, Python, Racket, Ruby }
 
 /** @type {Record<string,{(code: string) => { type: 'Program', body: {}[] }}>}*/
 export const from = {
@@ -2087,6 +2392,7 @@ async function cli() {
     jl: "Julia",
     lisp: "Common Lisp",
     lua: "Lua",
+    nim: "Nim",
     py: "Python",
     rb: "Ruby",
     rkt: "Racket",
