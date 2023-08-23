@@ -467,7 +467,15 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   },
   WhileStatement({ body, test }, i, opener = this.whileOpener) {
     return this.indent(i) + 'while ' + this.test(test, i, opener) + this.toCode(body, i, this.whileOpener)
-  }
+  },
+  YieldExpression({ argument, delegate }, i) {
+    if (!this.yieldKeyword) {
+      throw new Error('Yield expressions not supported')
+    } else if (delegate && !this.yieldDelegateKeyword) {
+      throw new Error('Delegated yield not supported')
+    }
+    return `${delegate ? this.yieldDelegateKeyword : this.yieldKeyword} ${this.toCode(argument, i)}`
+  },
 }
 
 /** Shared implementations for s-expression based languages */
@@ -922,9 +930,8 @@ ${this.list(consequent, i + 1, '\n')}`
     return `${this.indent(i)}${kind} ${this.list(declarations)}`
   },
   whileOpener: ' {',
-  YieldExpression({ argument, delegate }, i) {
-    return `yield${delegate ? '*' : ''} ${this.toCode(argument, i)}`
-  },
+  yieldDelegateKeyword: 'yield*',
+  yieldKeyword: 'yield',
 }
 Object.setPrototypeOf(JavaScript, generics)
 
@@ -1859,13 +1866,7 @@ ${this.indent(i + 1)}${name} = ${superClass ? `ref object of ${this.toCode(super
     return `${this.indent(i)}${kind}${declarations.length > 1 ? `\n${this.indent(i + 1)}` : ' '}${this.list(declarations, i + 1, `\n${this.indent(i + 1)}`)}`
   },
   whileOpener: '',
-  YieldExpression(ast) {
-    const { delegate, argument } = ast
-    if (delegate) {
-      abandon(ast, 'No yield* in Nim')
-    }
-    return `yield ${this.toCode(argument)}`
-  }
+  yieldKeyword: 'yield',
 }, generics)
 
 const Python = Object.setPrototypeOf({
@@ -1970,6 +1971,7 @@ ${this.body(body.body, i)}`
 ${this.body(body.body, i)}`
   },
   functionKeyword: 'def',
+  generatorKeyword: 'def',
   halfBlockOpener: ':',
   MemberExpression(ast, i) {
     if (ast.object.name === 'console') {
@@ -2107,6 +2109,8 @@ ${this.indent(i)}`
     return Lua.UpdateExpression.call(this, ...xs)
   },
   whileOpener: '',
+  yieldKeyword: 'yield',
+  yieldDelegateKeyword: 'yield from',
 }, generics)
 
 const Racket = {
