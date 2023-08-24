@@ -1458,22 +1458,12 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
   ForInStatement({ body, left, right }, i) {
     return `for ${this.toCode(left.declarations[0].id)} in pairs(${this.toCode(right, i)}) do ${this.toCode(body, i)}`
   },
-  FunctionExpression(ast, i) {
-    const { async, body, generator, id, params } = ast
-    if (generator) {
-      abandon(ast, 'Generator functions not supported')
-    }
+  FunctionExpression({ async, body, generator, id, params }, i) {
+    const result = []
     if (async) {
       console.warn('Stripping async')
     }
-    const result = [
-      this.functionKeyword,
-      ' ',
-      this.toCode(id),
-      '(',
-      this.list(params, i),
-      ')',
-    ]
+    result.push('function ', this.toCode(id), '(', this.list(params, i), ')')
     for (const param of params) {
       if (param.type === 'AssignmentPattern') {
         result.push('\n' + this.indent(i + 1) + this.toCode({
@@ -1483,7 +1473,15 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
         }))
       }
     }
+    if (generator) {
+      i += 1
+      result.push('\n', this.indent(i), 'return coroutine.wrap(function ()')
+    }
     result.push(this.toCode(body, i))
+    if (generator) {
+      i -= 1
+      result.push(')\n', this.indent(i), 'end')
+    }
     return result.join('')
   },
   Identifier({ name }) {
@@ -1625,7 +1623,14 @@ ${this.indent(i + offset)}if not ${success}`
   VariableDeclaration(ast, i) {
     return this.indent(i) + 'local ' + generics.VariableDeclaration.call(this, ast, i).trimStart()
   },
-  whileOpener: ' do'
+  whileOpener: ' do',
+  YieldExpression({ argument, delegate }, i) {
+    if (delegate) {
+      return `for value in ${this.toCode(argument, i)} do coroutine.yield(value) end`
+    } else {
+      return `coroutine.yield(${this.toCode(argument, i)})`
+    }
+  }
 }
 Object.setPrototypeOf(Lua, generics)
 
