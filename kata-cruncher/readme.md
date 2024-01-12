@@ -7,7 +7,7 @@ Handy CodeWars kata translator doodah. Translations go brrrrr. `describe` `it` i
 Also works as a command line utility. Install it with Deno.
 
 ```bash
-deno install --allow-read https://stellartux.github.io/random/kata-cruncher/kata-cruncher.ts
+deno install --allow-read https://stellartux.github.io/random/kata-cruncher/kata-cruncher.js
 ```
 
 Then use it like so:

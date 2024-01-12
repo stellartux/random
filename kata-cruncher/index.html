@@ -82,7 +82,7 @@ describe("the function", function(){
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
-    import { AbandonError, from, to } from './main.js'
+    import { AbandonError, from, to } from './kata-cruncher.js'
 
     /** @type {HTMLTextAreaElement} */
     const input = document.getElementById('input')
@@ -330,7 +330,7 @@ describe("the function", function(){
     }
 
     /**
-     * @param {string} input 
+     * @param {string} input
      * @param {object|string} [options] or `options.outputLanguage`
      * @param {string} [options.outputLanguage='JavaScript'] 'JavaScript' by default
      * @param {string} [options.showPreamble=false] 'false' by default

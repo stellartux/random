@@ -1,5 +1,5 @@
 import { assertEquals } from 'https://deno.land/std/testing/asserts.ts'
-import { from, to } from './main.js'
+import { from, to } from './kata-cruncher.js'
 
 const trim = ([s]) => s.trim?.() ?? s
 const input = from.JavaScript(`
@@ -21,8 +21,8 @@ end
 
 Deno.test('Simple kata - Lua', function () {
   assertEquals(to.Lua(input), trim`
-describe("the function", function () 
-    it("should do the thing", function () 
+describe("the function", function ()
+    it("should do the thing", function ()
         assert.equal(3, myFunction(2, 1))
     end)
 end)

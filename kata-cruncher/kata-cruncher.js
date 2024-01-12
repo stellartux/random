@@ -12,10 +12,6 @@ function abandon(ast, reason = 'Something went wrong') {
   throw new AbandonError(reason)
 }
 
-function implicitBreak(ast) {
-
-}
-
 function implicitReturn(ast) {
   while (ast.body?.length === 1 && ast.body?.body?.type === 'BlockStatement') {
     ast.body = ast.body.body
@@ -101,7 +97,7 @@ function not(ast) {
 
 /**
  * Converts a SwitchStatement to the equivalent IfStatement, if possible.
- * @return {object|null} 
+ * @return {object|null}
  **/
 function switchStatementToIfStatement({ cases, discriminant }) {
   if (/(^MemberExpression|Identifier|Literal)$/.test(discriminant.type)
@@ -468,11 +464,12 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   WhileStatement({ body, test }, i, opener = this.whileOpener) {
     return this.indent(i) + 'while ' + this.test(test, i, opener) + this.toCode(body, i, this.whileOpener)
   },
-  YieldExpression({ argument, delegate }, i) {
+  YieldExpression(ast, i) {
+    const { argument, delegate } = ast
     if (!this.yieldKeyword) {
-      throw new Error('Yield expressions not supported')
+      abandon(ast, 'Yield expressions not supported.')
     } else if (delegate && !this.yieldDelegateKeyword) {
-      throw new Error('Delegated yield not supported')
+      abandon(ast, 'Delegated yield not supported.')
     }
     return `${delegate ? this.yieldDelegateKeyword : this.yieldKeyword} ${this.toCode(argument, i)}`
   },
@@ -2231,10 +2228,11 @@ Object.setPrototypeOf(Racket, sexpr)
 
 const Ruby = Object.setPrototypeOf({
   ArrowFunctionExpression({ body, expression, params }, i) {
+    const paramList = params.length === 0 ? '' : ` |${this.list(params, i)}|`
     if (expression) {
-      return `{ |${this.list(params, i)}| ${this.toCode(body, i)} }`
+      return `{${paramList} ${this.toCode(body, i)} }`
     } else {
-      return `do |${this.list(params, i)}|${this.toCode(body, i)}`
+      return `do${paramList}${this.toCode(body, i)}`
     }
   },
   blockOpener: '',
@@ -2427,15 +2425,15 @@ async function cli() {
 
   if (args.help || args.h) {
     console.log(`
-    
+
         Kata Cruncher - the test case conversion tool for CodeWars
         usage: kata-cruncher [options] [filenames...]
-    
+
     Options:
     -h, --help
         Show this help message.
     --to='${[...Object.values(extToLang)].join("','")}'
-        Choose the output language. Defaults to 'Julia'. 
+        Choose the output language. Defaults to 'Julia'.
         Short versions of the language name may also be used.
     `)
     return
