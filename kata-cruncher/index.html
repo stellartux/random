@@ -284,10 +284,10 @@ describe("the function", function(){
               delete ast.object
               delete ast.optional
               delete ast.property
-            } else if (/assert_?(deep|strict)?_?equals?/i.test(ast.property.name)) {
+            } else if (/assert_?((deep|strict)?_?equals?|similar)/i.test(ast.property.name)) {
               ast.object.name = 'assert'
-              const name = to.camelCase(ast.property.name.slice(6))
-              ast.property.name = /^equals?$/i.test(name) ? 'strictEqual' : name
+              ast.property.name =
+                /similar|deep/i.test(ast.property.name) ? 'deepEqual' : 'strictEqual'
               normalize(ast)
             }
           } else {
