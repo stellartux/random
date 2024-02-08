@@ -64,9 +64,9 @@ function isStringConcatenation({ operator, left, right, type }) {
 
 function loopsForever(ast) {
   if (ast?.type === 'ForStatement') {
-    return !ast.test || (ast.test.type?.endsWith('Literal') && ast.test.value)
+    return !ast.test || (ast.test.type?.endsWith('Literal') && !!ast.test.value)
   } else if (ast?.type === 'WhileStatement') {
-    return ast.test.type?.endsWith('Literal') && ast.test.value
+    return ast.test.type?.endsWith('Literal') && !!ast.test.value
   }
 }
 
@@ -107,9 +107,38 @@ function switchStatementToIfStatement({ cases, discriminant }) {
         || finalStatement.type === 'ReturnStatement'
         || finalStatement.type === 'BreakStatement'
     })) {
-    // todo
+    const result = { alternate: {} }
+    let stmt = result
+    for (let i = 0; i < cases.length; ++i) {
+      if (cases[i].test) {
+        stmt = stmt.alternate
+        stmt.type = 'IfStatement'
+        stmt.test = {
+          type: 'BinaryExpression',
+          left: discriminant,
+          operator: '===',
+          right: cases[i].test,
+        }
+        stmt.consequent = {
+          type: 'BlockStatement',
+          body: cases[i].consequent,
+        }
+        stmt.alternate = {}
+      } else if (i === cases.length - 1) {
+        stmt.alternate = {
+          type: 'BlockStatement',
+          body: cases[i].consequent,
+        }
+        stmt = {}
+      } else {
+        return null
+      }
+    }
+    stmt.alternate = null
+    return result.alternate
+  } else {
+    return null
   }
-  return null
 }
 
 function updateExpressionToAssignmentExpression({ argument, operator, prefix }) {
@@ -1142,6 +1171,13 @@ ${this.indent(i)}end\n`
   },
   LabeledStatement({ label, body }, i) {
     return `${this.toCode(body, i)}\n${this.indent(i)}@label ${label.name}`
+  },
+  Literal(ast, i) {
+    if (typeof ast.value === 'bigint') {
+      return `big"${ast.raw.slice(0, -1)}"`
+    } else {
+      return generics.Literal.call(this, ast, i)
+    }
   },
   MemberExpression(ast, i) {
     if (ast.property.name === 'length') {
