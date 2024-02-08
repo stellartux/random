@@ -95,18 +95,27 @@ function not(ast) {
   }
 }
 
-/**
- * Converts a SwitchStatement to the equivalent IfStatement, if possible.
- * @return {object|null}
- **/
-function switchStatementToIfStatement({ cases, discriminant }) {
-  if (/(^MemberExpression|Identifier|Literal)$/.test(discriminant.type)
+function isConvertibleSwitchStatement({ cases, discriminant }) {
+  const noFallthroughs = /(^MemberExpression|Identifier|Literal)$/.test(discriminant.type)
     && cases?.slice(0, -1).every(({ consequent }) => {
       const finalStatement = consequent.at(-1)
       return finalStatement === undefined
         || finalStatement.type === 'ReturnStatement'
         || finalStatement.type === 'BreakStatement'
-    })) {
+    })
+  const defaultCase = cases.findIndex(({ test }) => test === null)
+  const noDefault = defaultCase === -1
+  const defaultLast = defaultCase === cases.length - 1
+  return noFallthroughs && (noDefault || defaultLast)
+}
+
+/**
+ * Converts a SwitchStatement to the equivalent IfStatement, if possible.
+ * @return {object|null}
+ **/
+function switchStatementToIfStatement(ast) {
+  if (isConvertibleSwitchStatement(ast)) {
+    const { cases, discriminant } = ast
     const result = { alternate: {} }
     let stmt = result
     for (let i = 0; i < cases.length; ++i) {
@@ -124,14 +133,12 @@ function switchStatementToIfStatement({ cases, discriminant }) {
           body: cases[i].consequent,
         }
         stmt.alternate = {}
-      } else if (i === cases.length - 1) {
+      } else {
         stmt.alternate = {
           type: 'BlockStatement',
           body: cases[i].consequent,
         }
         stmt = {}
-      } else {
-        return null
       }
     }
     stmt.alternate = null
@@ -431,7 +438,7 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
     return this.RestElement(ast)
   },
   SwitchStatement(ast, i) {
-    let ifStmt = switchStatementToIfStatement(ast)
+    const ifStmt = switchStatementToIfStatement(ast)
     if (ifStmt) {
       return this.toCode(ifStmt, i)
     } else {
@@ -1839,9 +1846,13 @@ ${this.indent(i + 1)}${name} = ${superClass ? `ref object of ${this.toCode(super
     result.push(this.list(consequent, i + 1, '\n'))
     return result.join('')
   },
-  SwitchStatement({ cases, discriminant }, i) {
-    // todo: validate no fallthrough in cases
-    return `case ${this.toCode(discriminant, i)}\n${this.list(cases, i, '\n')}`
+  SwitchStatement(ast, i) {
+    if (isConvertibleSwitchStatement(ast)) {
+      const { cases, discriminant } = ast
+      return `${this.indent(i)}case ${this.toCode(discriminant, i)}\n${this.list(cases, i, '\n')}`
+    } else {
+      abandon(ast, 'Could not convert SwitchStatement to IfStatement')
+    }
   },
   test(ast, i) {
     return this.toCode(ast, i) + ':'
