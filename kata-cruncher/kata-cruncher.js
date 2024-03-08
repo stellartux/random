@@ -928,6 +928,17 @@ ${this.list(consequent, i + 1, '\n')}`
   SwitchStatement({ cases, discriminant, }, i) {
     return `${this.indent(i)}switch (${this.toCode(discriminant)}) {\n${this.list(cases, i + 1, '\n')}\n${this.indent(i)}}`
   },
+  TemplateElement({ value: { raw } }) {
+    return raw
+  },
+  TemplateLiteral({ expressions, quasis }) {
+    const result = ['`', this.toCode(quasis[0])]
+    for (let i = 1; i < quasis.length; ++i) {
+      result.push(`$\{${this.toCode(expressions[i - 1])}\}`, this.toCode(quasis[i]))
+    }
+    result.push('`')
+    return result.join('')
+  },
   test(ast, i) {
     return `(${this.toCode(ast, i)})`
   },
@@ -1243,13 +1254,24 @@ ${this.indent(i)}end\n`
   RestElement({ argument }) {
     return `${this.toCode(argument)}...`
   },
-  SequenceExpression({ expressions }, i) {
+  SequenceExpression({ expressions }) {
     return `begin ${expressions.map(this.toCode.bind(this)).join('; ')} end`
   },
   SpreadElement({ argument }) {
     return `${this.toCode(argument)}...`
   },
   tabWidth: 4,
+  TemplateElement({ value: { raw } }) {
+    return raw.replaceAll('\\`', '`').replaceAll('"', '\\"')
+  },
+  TemplateLiteral({ expressions, quasis }) {
+    const result = ['"', this.toCode(quasis[0])]
+    for (let i = 1; i < quasis.length; ++i) {
+      result.push(`$(${this.toCode(expressions[i - 1])})`, this.toCode(quasis[i]))
+    }
+    result.push('"')
+    return result.join('')
+  },
   ThisExpression() {
     return 'self'
   },
@@ -1593,6 +1615,33 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     return `getmetatable(self)`
   },
   tabWidth: 4,
+  TemplateElement({ value: { raw } }) {
+    return `"${raw.replaceAll('\\`', '`').replaceAll('"', '\\"')
+      .replace(/\n+/g, (x) => `${'\\n'.repeat(x.length)}"\n${this.indent(2)}.. "`)}"`
+  },
+  TemplateLiteral({ expressions, quasis }) {
+    const result = [this.toCode(quasis[0])]
+    for (let k = 1; k < quasis.length; ++k) {
+      const isBinop = expressions[k - 1].type === 'BinaryExpression'
+      result.push(
+        isBinop ? ' .. (' : ' .. ',
+        this.toCode(expressions[k - 1]),
+        isBinop ? ') .. ' : ' .. ',
+        this.toCode(quasis[k])
+      )
+    }
+    if (result[0] === '""') {
+      result.shift()
+      if (result[2]?.[0] === ')') {
+        result[0] = '('
+      } else if (result.length === 0) {
+        return '""'
+      } else {
+        result.shift()
+      }
+    }
+    return result.join('')
+  },
   test(ast, i, keyword = ' then') {
     return `${this.toCode(ast, i)}${keyword}`
   },
@@ -2123,6 +2172,26 @@ ${this.indent(i)}`
     return 'self'
   },
   tabWidth: 4,
+  TemplateElement({ value: { raw } }) {
+    return raw.replaceAll('{', '{{').replaceAll('}', '}}').replaceAll('"', '\\"')
+  },
+  TemplateLiteral({ expressions, quasis }) {
+    const result = []
+    const first = this.toCode(quasis[0])
+    if (expressions.length === 0) {
+      if (first === '') {
+        return '""'
+      }
+      result.push('"""', first)
+    } else {
+      result.push('f"""', first)
+      for (let i = 1; i < quasis.length; ++i) {
+        result.push(`{${this.toCode(expressions[i - 1])}\}`, this.toCode(quasis[i]))
+      }
+    }
+    result.push('"""')
+    return result.join('')
+  },
   throwKeyword: 'raise',
   toOperator(operator) {
     switch (operator) {
