@@ -342,8 +342,7 @@ describe("the function", function(){
         showPreamble = false,
       } = typeof (options) === 'object' ? options : { outputLanguage: options }
       return (showPreamble && preamble[outputLanguage] || '') +
-        to[outputLanguage](normalize(from[inputLanguage](input))) +
-        (showPreamble && postamble[outputLanguage] || '' )
+        to[outputLanguage](normalize(from[inputLanguage](input)))
     }
 
   </script>
