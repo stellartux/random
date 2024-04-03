@@ -68,21 +68,13 @@ describe("the function", function(){
       <option>JavaScript</option>
     </select>
     <select id="to">
-      <option>Common Lisp</option>
-      <option>JavaScript</option>
-      <option selected>Julia</option>
-      <option>Lua</option>
-      <option>Nim</option>
-      <option>Python</option>
-      <option>Racket</option>
-      <option>Ruby</option>
     </select>
     <div></div>
     <div><label>Show preamble: <input id="show-preamble" type="checkbox" checked /></label></div>
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
-    import { AbandonError, from, to } from './kata-cruncher.js'
+    import { AbandonError, from, languages, to } from './kata-cruncher.js'
 
     /** @type {HTMLTextAreaElement} */
     const input = document.getElementById('input')
@@ -94,6 +86,13 @@ describe("the function", function(){
     const outputLanguage = document.getElementById('to')
     /** @type {HTMLInputElement} */
     const showPreamble = document.getElementById('show-preamble')
+
+    for (const key in languages) {
+      const option = document.createElement('option')
+      option.value = key
+      option.innerText = key
+      outputLanguage.appendChild(option)
+    }
 
     function count(target, xs) {
       let result = 0
@@ -343,7 +342,8 @@ describe("the function", function(){
         showPreamble = false,
       } = typeof (options) === 'object' ? options : { outputLanguage: options }
       return (showPreamble && preamble[outputLanguage] || '') +
-        to[outputLanguage](normalize(from[inputLanguage](input)))
+        to[outputLanguage](normalize(from[inputLanguage](input))) +
+        (showPreamble && postamble[outputLanguage] || '' )
     }
 
   </script>
