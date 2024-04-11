@@ -27,20 +27,19 @@ function implicitReturn(ast) {
 }
 
 /** ```-3 / 2 | 0 //= -1``` */
-function isFloorDivideToZero({ operator, left, right, type }) {
+function isFloorDivideToZero(ast) {
   // TODO
-  return type === 'BinaryExpression' && operator === '|'
-    && right.type === 'Literal' && right.value === 0
-    && left.type === 'BinaryExpression' && left.operator === '/'
+  return ast?.type === 'BinaryExpression' && ast?.operator === '|'
+    && ast.right?.type === 'Literal' && ast.right?.value === 0
+    && ast.left?.type === 'BinaryExpression' && ast.left?.operator === '/'
 }
 
 /** `Math.floor(-3 / 2) //= -2` */
 function isFloorDivideToNegativeInfinity(ast) {
-  return type === 'CallExpression' && operator === '|'
-    && right.type === 'Literal' && right.value === 0
-    && left.type === 'BinaryExpression' && left.operator === '/'
+  return ast?.type === 'CallExpression' && ast?.operator === '|'
+    && ast.right?.type === 'Literal' && ast.right?.value === 0
+    && ast.left?.type === 'BinaryExpression' && ast.left?.operator === '/'
 }
-
 
 /**
  * Compare the AST and matches any of the given names.
@@ -59,8 +58,8 @@ function matchTerm(ast, ...names) {
     let i
     for (i = 0; i < props.length - 1; ++i) {
       if (term.type === 'MemberExpression' &&
-        term.object.type === 'Identifier' &&
-        (term.object.name === props[i] || props[i] === '?')) {
+        (term.object.type === 'Identifier' && term.object.name === props[i]
+          || props[i] === '?')) {
         term = term.property
       } else {
         continue nextName
@@ -1465,7 +1464,7 @@ const Lua = {
           console.warn(`assert.${property.name}`)
         }
       } else if (property.name === 'toString') {
-        return `tostring(${object.name})`
+        return `tostring(${this.toCode(object)})`
       }
     }
     return generics.CallExpression.call(this, ast, i)
@@ -1629,12 +1628,23 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     return `${this.toCode(body, i)}\n${this.indent(i)}::${label.name}::`
   },
   MemberExpression(ast, i) {
-    if (ast.object.name === 'console') {
+    if (ast.object.type === 'Literal') {
+      if (typeof ast.object.value === 'string') {
+        const obj = this.toCode(ast.object, i)
+        const prop = {
+          charCodeAt: 'byte'
+        }[ast.property.name] || this.toCode(ast.property, i)
+        return `(${obj}):${prop}`
+      }
+    }
+    if (matchTerm(ast, 'console.?')) {
       return 'print'
-    } else if (ast.property.name === 'length') {
+    } else if (matchTerm(ast, '?.length')) {
       return '#' + this.toCode(ast.object)
-    } else if (ast.object.type === 'Literal') {
-      return `(${this.toCode(ast.object, i)}):${this.toCode(ast.property, i)}`
+    } else if (matchTerm(ast, '?.charCodeAt')) {
+      return this.toCode(ast.object) + ':byte'
+    } else if (matchTerm(ast, 'String.fromCharCode')) {
+      return 'string.char'
     } else {
       return generics.MemberExpression.call(this, ast, i)
     }
@@ -2088,9 +2098,28 @@ ${this.body(ast.arguments[1].body.body, i, ast)}.`
     } else if (matchTerm(callee, 'console.?')) {
       return `format("${Array(ast.arguments.length).fill('~w').join(' ')}\\n", [${this.list(ast.arguments)}])`
     } else if (matchTerm(callee, 'Math.?')) {
-      console.dir(callee)
+      switch (callee.property.name) {
+        case 'cbrt':
+          return `(${this.toCode(ast.arguments[0])} ** (1/3))`
+        case 'clz32':
+          return '(32 - msb((' + this.toCode(ast.arguments[0]) + ' /\\ 0xffffffff) << 1 + 1))'
+        case 'expm1':
+          return '(exp(' + this.toCode(ast.arguments[0]) + ') - 1)'
+        case 'hypot':
+          return `sqrt((${ast.arguments.map((x) => this.toCode(x)).join(')**2 + ')})**2)`
+        case 'log1p':
+          return `log(1 + ${this.toCode(ast.arguments[0])})`
+        case 'pow':
+          return `(${this.toCode(ast.arguments[0])} ** ${this.toCode(ast.arguments[1])})`
+        default:
+      }
     }
-    return `${toSnakeCase(this.toCode(callee))}(${ast.arguments.map((x) => this.toCode(x, i)).join(', ')})`
+    const fn = toSnakeCase(this.toCode(callee))
+    if (ast.arguments.length === 0) {
+      return fn
+    } else {
+      return fn + '(' + ast.arguments.map((x) => this.toCode(x, i)).join(', ') + ')'
+    }
   },
   CatchClause({ body, param }) {
     return `${param ? this.toCode(param) : '_'}, ${this.toCode(body)}`
@@ -2135,17 +2164,36 @@ ${this.body(body.body, i, ast)}.`
     }
     return generics.list.call(this, list, i, separator)
   },
-  MemberExpression(ast, i) {
+  MemberExpression(ast) {
     const { computed, object, property } = ast
     if (computed) {
       abandon(ast, 'Computed members not supported in Prolog')
     } else if (matchTerm(ast, 'Math.?')) {
-      if (['E', 'PI'].includes(property.name)) {
+      if ([
+        'E', 'PI', 'abs', 'acos', 'acosh', 'asin', 'asinh', 'atan',
+        'atan2', 'atanh', 'cos', 'cosh', 'exp', 'max', 'min',
+        'round', 'sign', 'sin', 'sinh', 'sqrt', 'tan', 'tanh'
+      ].includes(property.name)) {
         return property.name.toLowerCase()
+      } else if (property.name === 'SQRT2') {
+        return 'sqrt(2)'
+      } else if (property.name === 'SQRT1_2') {
+        return 'sqrt(1/2)'
+      } else if (property.name === 'LOG10E') {
+        return 'log10(e)'
+      } else if (property.name === 'LN10') {
+        return 'log(10)'
+      } else if (property.name === 'LN2') {
+        return 'log(2)'
+      } else if (property.name === 'ceil') {
+        return 'ceiling'
+      } else if (property.name === 'random') {
+        return 'random_float'
+      } else if (property.name === 'trunc') {
+        return 'truncate'
       }
-    } else {
-      return `${toSnakeCase(this.toCode(object))}:${toSnakeCase(this.toCode(property))}`
     }
+    return `${toSnakeCase(this.toCode(object))}:${toSnakeCase(this.toCode(property))}`
   },
   NewExpression(ast, i) {
     return this.CallExpression(ast, i)
@@ -2197,11 +2245,11 @@ ${this.body(body.body, i, ast)}.`
       case '>>': return '>>'
       case '~': return '\\'
       case '%': return 'rem'
+      case '<=': return '=<'
       case 'void': console.warn('Ignoring void'); return ''
       default: console.warn('Unknown operator ' + op)
-      case '+': case '-': case '*': case '/': case '==': case '<<':
-      case '<': case '>': case '<=': case '>=': case '%': case '=':
-      case '|': case '&': case '//': case '..': case '~':
+      case '+': case '-': case '*': case '/': case '==':
+      case '<<': case '<': case '>': case '>=': case '=':
         return op
     }
   },
