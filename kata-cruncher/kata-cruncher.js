@@ -2756,29 +2756,39 @@ const Ruby = Object.setPrototypeOf({
 }, generics)
 
 /** @param {string} str */
+function toWordParts(str) {
+  return str.match(/\d+|[A-Z]+(?![a-z])|[A-Z]?[a-z]+/g) || ['']
+}
+
+/** @param {string} str */
+function toUpperCaseFirst(str) {
+  return str[0].toUpperCase() + str.slice(1).toLowerCase()
+}
+
+/** @param {string} str */
+function toLowerCase(str) {
+  return str.toLowerCase()
+}
+
+/** @param {string} str */
 function toCamelCase(str) {
-  return (str[0] || '').toLowerCase() + str.slice(1).replace(/\W+./g, (x) => x.slice(-1).toUpperCase())
+  const [part, ...parts] = toWordParts(str)
+  return part.toLowerCase() + parts.map(toUpperCaseFirst).join('')
 }
 
 /** @param {string} str */
 function toKebabCase(str) {
-  return (str[0].toLowerCase() + str.slice(1))
-    .trim(/[_ ]+/)
-    .replace(/[A-Z]/g, c => '-' + c.toLowerCase())
-    .replace(/\W/g, '-') || '_'
+  return toWordParts(str).map(toLowerCase).join('-')
 }
 
 /** @param {string} str */
 function toSnakeCase(str) {
-  return str
-    .replace(/^[A-Z]/, (x) => x.toLowerCase())
-    .replace(/[A-Z]/g, (x) => '_' + x.toLowerCase())
-    .replace(/(?<=[a-zA-Z])(?=\d)|(?<=\d)(?=[a-zA-Z])|[^a-zA-Z0-9:.]+/g, '_')
+  return toWordParts(str).map(toLowerCase).join('_')
 }
 
 /** @param {string} str */
 function toTitleCase(str) {
-  return str[0].toUpperCase() + str.slice(1).replace(/\W./g, (x) => x[1].toUpperCase())
+  return toWordParts(str).map(toUpperCaseFirst).join()
 }
 
 export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Nim, Prolog, Python, Racket, Ruby }
