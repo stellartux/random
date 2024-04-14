@@ -42,7 +42,7 @@ function isFloorDivideToNegativeInfinity(ast) {
 }
 
 /**
- * Compare the AST and matches any of the given names.
+ * Compare the CallExpression to see if the callee matches any of the given names.
  *
  * ```js
  * matchTerm(ast, 'console.log') // matches `console.log`
@@ -51,6 +51,7 @@ function isFloorDivideToNegativeInfinity(ast) {
  * @param {string[]} names
  **/
 function matchTerm(ast, ...names) {
+  if (!ast) return false
   nextName: for (const name of names) {
     if (!name) break
     let term = ast
@@ -2066,7 +2067,7 @@ const Prolog = Object.setPrototypeOf({
   body(body, i = 0, ...xs) {
     return body.map((stmt) => this.toCode(stmt, i + 1, ...xs)).filter(Boolean).join(',\n')
   },
-  CallExpression(ast, i) {
+  CallExpression(ast, i = 0) {
     const { callee } = ast
     if (matchTerm(callee, 'describe')) {
       const name = toSnakeCase(ast.arguments[0].value.replace(/^\W+|\W+$/g, ''))
@@ -2077,6 +2078,29 @@ ${ast.arguments[1].body.body.map((x) => this.toCode(x)).join('\n')}
 
 :- end_tests(${name})`
     } else if (matchTerm(callee, 'it')) {
+      const body = ast.arguments[1].body.body
+      if (body.length > 1) {
+        const length = body[0]?.expression?.arguments?.length
+        const calleeName = body[0]?.expression?.arguments?.[0]?.callee?.name
+        if (body.every((stmt) =>
+          isAssertEqual(stmt.expression?.callee) &&
+          stmt.expression.arguments?.length === length &&
+          stmt.expression?.arguments?.[0]?.callee?.name === calleeName
+        )) {
+          const argCount = body[0].expression.arguments[0].arguments.length
+          const inputArgs = argCount === 1 ? 'Input' :
+            Array.from({ length: argCount }, (_, i) => 'Input' + i).join(', ')
+          return `test(${toSnakeCase(ast.arguments[0].value)}, forall(member((${inputArgs}, Expected), [
+${body.map(({ expression }) => this.indent(i + 1) + '(' +
+            expression.arguments[0].arguments.map((x) => this.toCode(x, i + 1)).join(', ') +
+            ', ' + this.toCode(expression.arguments[1]) + ')'
+          ).join(',\n')}
+${this.indent(i)}]))) :-
+${this.indent(i + 1)}${toSnakeCase(calleeName)}(${inputArgs}, Actual),
+${this.indent(i + 1)}assertion(Actual == Expected).
+`
+        }
+      }
       return `test(${toSnakeCase(ast.arguments[0].value)}) :-
 ${this.body(ast.arguments[1].body.body, i, ast)}.`
     } else if (isAssertTrue(ast)) {
@@ -2791,7 +2815,7 @@ function toTitleCase(str) {
   return toWordParts(str).map(toUpperCaseFirst).join()
 }
 
-export const languages = { 'Common Lisp': CommonLisp, Julia, JavaScript, Lua, Nim, Prolog, Python, Racket, Ruby }
+export const languages = { 'Common Lisp': CommonLisp, JavaScript, Julia, Lua, Nim, Prolog, Python, Racket, Ruby }
 
 /** @type {Record<string,{(code: string) => { type: 'Program', body: {}[] }}>}*/
 export const from = {
