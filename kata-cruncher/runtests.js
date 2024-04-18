@@ -30,7 +30,7 @@ end)
 })
 
 Deno.test('Simple kata - Common Lisp', function () {
-  assertEquals(to.CommonLisp(input), trim`
+  assertEquals(to['Common Lisp'](input), trim`
 (deftest the-function
  (testing "should do the thing"
   (ok (= (my-function 2 1) 3)))
@@ -50,14 +50,14 @@ describe('the function', function () {
 
 const consoleLog = from.JavaScript('console.log("woo!")')
 
+Deno.test('console.log - Common Lisp', () => {
+  assertEquals(to['Common Lisp'](consoleLog), '(displayln "woo!")')
+})
 Deno.test('console.log - JavaScript', () => {
   assertEquals(to.JavaScript(consoleLog), "console.log('woo!')")
 })
 Deno.test('console.log - Julia', () => {
-  assertEquals(to.Julia(consoleLog), 'print("woo!")')
-})
-Deno.test('console.log - Common Lisp', () => {
-  assertEquals(to.CommonLisp(consoleLog), '(print "woo!")')
+  assertEquals(to.Julia(consoleLog), 'println("woo!")')
 })
 Deno.test('console.log - Lua', () => {
   assertEquals(to.Lua(consoleLog), 'print("woo!")')
@@ -109,4 +109,56 @@ Deno.test('for loop 3 - Lua', () => {
 for i = 10, 0, -1 do
 
 end`)
+})
+
+const divOrToZero = from.JavaScript('-5 / 2 | 0')         //= -2
+const divToZero = from.JavaScript('Math.trunc(-5 / 2)')   //= -2
+const divToNegInf = from.JavaScript('Math.floor(-5 / 2)') //= -3
+
+Deno.test('Integer division - Common Lisp', () => {
+  assertEquals(to['Common Lisp'](divOrToZero), '(truncate -5 2)')
+  assertEquals(to['Common Lisp'](divToZero), '(truncate -5 2)')
+  assertEquals(to['Common Lisp'](divToNegInf), '(floor -5 2)')
+})
+
+Deno.test('Integer division - Julia', () => {
+  assertEquals(to.Julia(divOrToZero), '-5 ÷ 2')
+  assertEquals(to.Julia(divToZero), 'div(-5, 2)')
+  assertEquals(to.Julia(divToNegInf), 'fld(-5, 2)')
+})
+
+Deno.test('Integer division - Lua', () => {
+  // assertEquals(to.Lua(divOrToZero), '-5 // 2')
+  // assertEquals(to.Lua(divToZero), '-5 // 2')
+  assertEquals(to.Lua(divToNegInf), '-5 // 2')
+})
+
+Deno.test('Integer division - Nim', () => {
+  assertEquals(to.Nim(divOrToZero), '-5 div 2')
+  assertEquals(to.Nim(divToZero), '-5 div 2')
+  // assertEquals(to.Nim(divToNegInf), '-5 div 2')
+})
+
+Deno.test('Integer division - Prolog', () => {
+  assertEquals(to.Prolog(divOrToZero), ':- -5 // 2.')
+  assertEquals(to.Prolog(divToZero), ':- -5 // 2.')
+  assertEquals(to.Prolog(divToNegInf), ':- -5 div 2.')
+})
+
+Deno.test('Integer division - Python', () => {
+    // assertEquals(to.Python(divOrToZero), '-5 // 2')
+  // assertEquals(to.Python(divToZero), '-5 // 2')
+  assertEquals(to.Python(divToNegInf), '-5 // 2')
+})
+
+Deno.test('Integer division - Racket', () => {
+  assertEquals(to.Racket(divOrToZero), '(quotient -5 2)')
+  assertEquals(to.Racket(divToZero), '(quotient -5 2)')
+  assertEquals(to.Racket(divToNegInf), '(floor-quotient -5 2)')
+})
+
+Deno.test('Integer division - Ruby', () => {
+  assertEquals(to.Ruby(divOrToZero), '(-5 / 2).floor')
+  assertEquals(to.Ruby(divToZero), '(-5 / 2).floor')
+  assertEquals(to.Ruby(divToNegInf), '-5.div(2)')
 })

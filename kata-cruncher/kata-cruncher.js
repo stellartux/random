@@ -26,19 +26,25 @@ function implicitReturn(ast) {
   return ast
 }
 
-/** ```-3 / 2 | 0 //= -1``` */
-function isFloorDivideToZero(ast) {
-  // TODO
-  return ast?.type === 'BinaryExpression' && ast?.operator === '|'
-    && ast.right?.type === 'Literal' && ast.right?.value === 0
-    && ast.left?.type === 'BinaryExpression' && ast.left?.operator === '/'
-}
-
 /** `Math.floor(-3 / 2) //= -2` */
 function isFloorDivideToNegativeInfinity(ast) {
-  return ast?.type === 'CallExpression' && ast?.operator === '|'
-    && ast.right?.type === 'Literal' && ast.right?.value === 0
-    && ast.left?.type === 'BinaryExpression' && ast.left?.operator === '/'
+  return matchTerm(ast.callee, 'Math.floor') &&
+    ast.arguments[0]?.type === 'BinaryExpression' &&
+    ast.arguments[0].operator === '/'
+}
+
+/** ```-3 / 2 | 0 //= -1``` or ```Math.trunc(-3 / 2) //= -1``` */
+function isFloorDivideToZero(ast) {
+  return ast?.type === 'BinaryExpression'
+    && ast.operator === '|'
+    && ast.right.type === 'Literal'
+    && ast.right.value === 0
+    && ast.left.type === 'BinaryExpression'
+    && ast.left.operator === '/'
+    || ast?.type === 'CallExpression'
+    && matchTerm(ast?.callee, 'Math.trunc')
+    && ast.arguments?.[0]?.type === 'BinaryExpression'
+    && ast.arguments[0].operator === '/'
 }
 
 /**
@@ -59,7 +65,7 @@ function matchTerm(ast, ...names) {
     let i
     for (i = 0; i < props.length - 1; ++i) {
       if (term.type === 'MemberExpression' &&
-        (term.object.type === 'Identifier' && term.object.name === props[i]
+        (term.object?.type === 'Identifier' && term.object?.name === props[i]
           || props[i] === '?')) {
         term = term.property
       } else {
@@ -280,7 +286,7 @@ const generics = {
     return result.join(' ')
   },
   binaryExpressionNeedsParens(parentOperator, ast) {
-    return ast && this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[ast.operator]
+    return ast?.type === 'BinaryExpression' && this.binaryOperatorPrecedence[parentOperator] > this.binaryOperatorPrecedence[ast.operator]
   },
   binaryOperatorPrecedence: {
     ",": 0,
@@ -763,10 +769,10 @@ const CommonLisp = {
       if (right.type === 'Literal' && right.value === 0) {
         return `(zerop ${this.toCode(left, i)})`
       }
-    } else if (isFloorDivideToNegativeInfinity(ast)) {
+    } else if (isFloorDivideToZero(ast)) {
       return this.CallExpression({
         type: 'CallExpression',
-        callee: { type: 'Identifier', name: 'floor' },
+        callee: { type: 'Identifier', name: 'truncate' },
         arguments: [left.left, left.right]
       })
     } else if (operator === '!=' || operator === '!==') {
@@ -788,6 +794,18 @@ const CommonLisp = {
           return `(let ((expected ${rhs})) \n${this.indent(i + 1)} (ok (${cmp} ${lhs} expected)))`
         }
       }
+    } else if (isFloorDivideToNegativeInfinity(ast)) {
+      ast = {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'floor' },
+        arguments: [ast.arguments[0]?.left, ast.arguments[0]?.right]
+      }
+    } else if (isFloorDivideToZero(ast)) {
+      ast = {
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'truncate' },
+        arguments: [ast.arguments[0]?.left, ast.arguments[0]?.right]
+      }
     } else if (ast.callee.type === 'MemberExpression') {
       if (ast.callee.object.name === 'console') {
         return '(displayln ' + this.list(ast.arguments, i) + ')'
@@ -800,14 +818,13 @@ const CommonLisp = {
     } else if (matchTerm(ast.callee, 'describe')) {
       return `(deftest ${toKebabCase(ast.arguments[0].raw.slice(1, -1))}${this.toCode(ast.arguments[1].body, i)})`
     } else if (ast.callee.name === 'it') {
-      return `($ ${this.toCode(ast.arguments[0])}${this.toCode(ast.arguments[1].body, i, '')}`
-    } else {
-      const args = [...ast.arguments]
-      if (ast.callee) {
-        args.unshift(ast.callee)
-      }
-      return '(' + this.list(args) + ')'
+      return `(testing ${this.toCode(ast.arguments[0])}${this.toCode(ast.arguments[1].body, i, '')}`
     }
+    const args = [...ast.arguments]
+    if (ast.callee) {
+      args.unshift(ast.callee)
+    }
+    return '(' + this.list(args) + ')'
   },
   elseKeyword: 't',
   ForStatement(ast, i) {
@@ -1064,9 +1081,7 @@ const Julia = {
   blockOpener: 'begin',
   blockCloser: 'end',
   BinaryExpression(ast, ...xs) {
-    if (ast.operator === '|'
-      && ast.right.type === 'Literal' && ast.right.value === 0
-      && ast.left.type === 'BinaryExpression' && ast.left.operator === '/') {
+    if (isFloorDivideToZero(ast)) {
       ast = { ...ast.left, operator: '÷' }
     } else if (isStringConcatenation(ast)) {
       ast = { ...ast, operator: '*' }
@@ -1112,7 +1127,11 @@ const Julia = {
 ${this.indent(i)}@fact ${lhs} --> expected "${this.toCode(ast.arguments[0].callee)}(${ast.arguments[0].arguments.length ? '$(repr(' + ast.arguments[0].arguments.map((arg) => this.toCode(arg)).join(')), $(repr(') + ')' : ''})) --> $(repr(expected))"`
       }
     } else if (ast.callee.type === 'MemberExpression') {
-      if (ast.callee.object.name === 'console') {
+      if (isFloorDivideToZero(ast)) {
+        return `div(${this.toCode(ast.arguments[0].left)}, ${this.toCode(ast.arguments[0].right)})`
+      } else if (isFloorDivideToNegativeInfinity(ast)) {
+        return `fld(${this.toCode(ast.arguments[0].left)}, ${this.toCode(ast.arguments[0].right)})`
+      } else if (ast.callee.object.name === 'console') {
         const name = ast.callee.property.name
         const args = this.list(ast.arguments)
         if (name === 'warn') {
@@ -1122,7 +1141,7 @@ ${this.indent(i)}@fact ${lhs} --> expected "${this.toCode(ast.arguments[0].calle
         } else if (name === 'error') {
           return `@error ${args}`
         } else if (name === 'assert') {
-          return '@assert ${args}'
+          return `@assert ${args}`
         } else {
           return `println(${args})`
         }
@@ -1136,9 +1155,8 @@ ${this.indent(i)}@fact ${lhs} --> expected "${this.toCode(ast.arguments[0].calle
       return `${this.toCode(ast.callee.property, i)}(${this.list(ast.arguments, i)})`
     } else if (matchTerm(ast.callee, 'describe', 'it')) {
       return `${ast.callee.name === 'describe' ? 'facts' : 'context'}(${this.toCode(ast.arguments[0], i)}) ${this.toCode(ast.arguments[1].body, i, 'do')}`
-    } else {
-      return `${this.toCode(ast.callee, i)}(${this.list(ast.arguments, i)})`
     }
+    return `${this.toCode(ast.callee, i)}(${this.list(ast.arguments, i)})`
   },
   ClassDeclaration({ body, id, superClass }, i) {
     const name = this.toCode(id)
@@ -1448,7 +1466,16 @@ const Lua = {
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression') {
       const { object, property } = ast.callee
-      if (object.name === 'assert') {
+      if (matchTerm(ast.callee, 'Math.?')) {
+        if (isFloorDivideToNegativeInfinity(ast)) {
+          const { left, right } = ast.arguments[0]
+          return this.toCode(left, i) + ' // ' + this.toCode(right, i)
+        } else if (isFloorDivideToZero(ast)) {
+          console.warn('Lua: Division rounding to zero may round to -Inf instead')
+          const { left, right } = ast.arguments[0]
+          return this.toCode(left, i) + ' // ' + this.toCode(right, i)
+        }
+      } else if (object.name === 'assert') {
         const args = ast.arguments.map((arg) => this.toCode(arg, i))
         if (/^(expect(_?similar)?|(strict_?)?equals?)$/i.test(property.name)) {
           [args[0], args[1]] = [args[1], args[0]]
@@ -1829,6 +1856,8 @@ const Nim = Object.setPrototypeOf({
   BinaryExpression(ast, ...xs) {
     if (ast.operator === '**') {
       abandon(ast, `Nim: operator ${ast.operator} not supported.`)
+    } else if (isFloorDivideToZero(ast)) {
+      return this.toCode({ ...ast.left, operator: 'div' })
     }
     return generics.BinaryExpression.call(this, ast, ...xs)
   },
@@ -1842,6 +1871,15 @@ const Nim = Object.setPrototypeOf({
       abandon(ast, "No labels in Nim.")
     }
     return `${this.indent(i)}break`
+  },
+  CallExpression(ast, ...xs) {
+    if (isFloorDivideToZero(ast)) {
+      return this.toCode({ ...ast.arguments[0], operator: 'div' })
+    } else if (isFloorDivideToNegativeInfinity(ast)) {
+      console.warn('Nim: Division rounding to negative infinity may round to zero.')
+      return this.toCode({ ...ast.arguments[0], operator: 'div' })
+    }
+    return generics.CallExpression.call(this, ast, ...xs)
   },
   ClassBody({ body }, i, name) {
     return body.toSorted((a, b) => a > b).map((stmt) => this.toCode(stmt, i, name)).join('\n')
@@ -1896,10 +1934,8 @@ ${this.indent(i + 1)}${name} = ${superClass ? `ref object of ${this.toCode(super
   },
   lambdaKeyword: 'proc',
   MemberExpression(ast, ...xs) {
-    if (ast.object.name === 'console') {
-      if (ast.property.name === 'log') {
-        return 'echo'
-      }
+    if (matchTerm(ast, 'console._')) {
+      return 'echo'
     }
     return generics.MemberExpression.call(this, ast, ...xs)
   },
@@ -2057,7 +2093,7 @@ const Prolog = Object.setPrototypeOf({
     return generics.AssignmentExpression.call(this, ast, i)
   },
   BinaryExpression(ast, ...xs) {
-    if (isFloorDivideToNegativeInfinity(ast)) {
+    if (isFloorDivideToZero(ast)) {
       ast = { ...ast.left, operator: '//' }
     }
     return generics.BinaryExpression.call(this, ast, ...xs)
@@ -2129,14 +2165,28 @@ ${this.body(ast.arguments[1].body.body, i, ast)}.`
           return '(32 - msb((' + this.toCode(ast.arguments[0]) + ' /\\ 0xffffffff) << 1 + 1))'
         case 'expm1':
           return '(exp(' + this.toCode(ast.arguments[0]) + ') - 1)'
+        case 'floor':
+          if (isFloorDivideToNegativeInfinity(ast)) {
+            return this.toCode({ ...ast.arguments[0], operator: 'div' })
+          }
+          break
         case 'hypot':
           return `sqrt((${ast.arguments.map((x) => this.toCode(x)).join(')**2 + ')})**2)`
         case 'log1p':
           return `log(1 + ${this.toCode(ast.arguments[0])})`
         case 'pow':
           return `(${this.toCode(ast.arguments[0])} ** ${this.toCode(ast.arguments[1])})`
+        case 'trunc':
+          if (isFloorDivideToZero(ast)) {
+            return this.toCode({ ...ast.arguments[0], operator: '//' })
+          }
+          break
         default:
       }
+    } else if (callee.object?.type === 'Literal' && callee.object.regex && callee.property.name === 'test') {
+      return 're_match(' + this.toCode(callee.object) + ', ' + this.toCode(ast.arguments[0]) + ')'
+    } else if (matchTerm(callee, '?.match', '?.matchAll')) {
+      return 're_match(' + this.toCode(ast.arguments[0]) + ', ' + this.toCode(callee.object) + ')'
     }
     const fn = toSnakeCase(this.toCode(callee))
     if (ast.arguments.length === 0) {
@@ -2239,6 +2289,14 @@ ${this.body(body.body, i, ast)}.`
     }
     return generics.Property.call(this, ast, i)
   },
+  RegExpLiteral(ast) {
+    const { flags, pattern } = ast
+    if (!/^[gmis]*$/.test(flags)) {
+      abandon(ast, `Prolog: Invalid regular expression flag "${flags}"`)
+    }
+    return '"' + pattern.replace(/[\\"]/g, "\\$1") + '"' +
+      (flags === '' ? flags : '/' + flags)
+  },
   RestElement({ argument }) {
     return ' | ' + this.toCode(argument)
   },
@@ -2265,15 +2323,16 @@ ${this.body(body.body, i, ast)}.`
       case '===': return '=='
       case '!=': return '\\='
       case '!==': return '\\=='
-      case '>>>': console.warn('Treating unsigned bitshift as signed')
+      case '>>>': console.warn('Prolog: Treating unsigned bitshift as signed')
       case '>>': return '>>'
       case '~': return '\\'
       case '%': return 'rem'
       case '<=': return '=<'
-      case 'void': console.warn('Ignoring void'); return ''
-      default: console.warn('Unknown operator ' + op)
+      case 'void': console.warn('Prolog: Ignoring void'); return ''
+      default: console.warn('Prolog: Unknown operator ' + op)
       case '+': case '-': case '*': case '/': case '==':
       case '<<': case '<': case '>': case '>=': case '=':
+      case 'div': case '//':
         return op
     }
   },
@@ -2317,7 +2376,8 @@ const Python = Object.setPrototypeOf({
     }
   },
   BinaryExpression(ast, ...xs) {
-    if (isFloorDivideToNegativeInfinity(ast)) {
+    if (isFloorDivideToZero(ast)) {
+      console.warn('Python: Division rounding to zero may round to negative infinity.')
       ast = { ...ast.left, operator: '//' }
     }
     return generics.BinaryExpression.call(this, ast, ...xs)
@@ -2343,6 +2403,15 @@ const Python = Object.setPrototypeOf({
   },
   boolTrue: 'True',
   boolFalse: 'False',
+  CallExpression(ast, ...xs) {
+    if (isFloorDivideToZero(ast)) {
+      console.warn('Python: Division rounding to zero may round to negative infinity.')
+      return this.toCode({ ...ast.arguments[0], operator: '//' })
+    } else if (isFloorDivideToNegativeInfinity(ast)) {
+      return this.toCode({ ...ast.arguments[0], operator: '//' })
+    }
+    return generics.CallExpression.call(this, ast, ...xs)
+  },
   ClassDeclaration(ast, i) {
     const { body, id, superClass } = ast
     return `${this.indent(i)}class ${this.toCode(id)}${superClass ? `(${this.toCode(superClass)})` : ''}:
@@ -2560,7 +2629,7 @@ const Racket = {
       if (right.type === 'Literal' && right.value === 0) {
         return `(zero? ${this.toCode(left, i)})`
       }
-    } else if (isFloorDivideToNegativeInfinity(ast)) {
+    } else if (isFloorDivideToZero(ast)) {
       return this.CallExpression({
         type: 'CallExpression',
         callee: { type: 'Identifier', name: 'quotient' },
@@ -2568,6 +2637,22 @@ const Racket = {
       })
     }
     return sexpr.BinaryExpression.call(this, ast, i)
+  },
+  CallExpression(ast, ...xs) {
+    if (isFloorDivideToZero(ast)) {
+      return this.CallExpression({
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'quotient' },
+        arguments: [ast.arguments[0].left, ast.arguments[0].right]
+      })
+    } else if (isFloorDivideToNegativeInfinity(ast)) {
+      return this.CallExpression({
+        type: 'CallExpression',
+        callee: { type: 'Identifier', name: 'floor-quotient' },
+        arguments: [ast.arguments[0].left, ast.arguments[0].right]
+      })
+    }
+    return sexpr.CallExpression.call(this, ast, ...xs)
   },
   decrementFunction: 'sub1',
   ForStatement(ast, i) {
@@ -2672,6 +2757,12 @@ const Ruby = Object.setPrototypeOf({
   },
   blockOpener: '',
   blockCloser: 'end',
+  BinaryExpression(ast, ...xs) {
+    if (isFloorDivideToZero(ast)) {
+      return '(' + this.toCode(ast.left) + ').floor'
+    }
+    return generics.BinaryExpression.call(this, ast, ...xs)
+  },
   binaryOperatorPrecedence: Object.setPrototypeOf({
     // https://ruby-doc.org/3.2.2/syntax/precedence_rdoc.html
     "==": 3.5,
@@ -2691,6 +2782,10 @@ const Ruby = Object.setPrototypeOf({
   CallExpression(ast, i) {
     if (ast.callee.type === 'MemberExpression' && ast.arguments.length === 0) {
       return this.toCode(ast.callee, i)
+    } else if (isFloorDivideToZero(ast)) {
+      return '(' + this.toCode(ast.arguments[0], i) + ').floor'
+    } else if (isFloorDivideToNegativeInfinity(ast)) {
+      return this.toCode(ast.arguments[0].left, i) + '.div(' + this.toCode(ast.arguments[0].right, i) + ')'
     }
     return generics.CallExpression.call(this, ast, i)
   },
