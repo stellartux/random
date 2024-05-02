@@ -48,12 +48,13 @@ function isFloorDivideToZero(ast) {
 }
 
 /**
- * Compare the CallExpression to see if the callee matches any of the given names.
+ * Compare the MemberExpression to see if the callee matches any of the given names.
  *
  * ```js
  * matchTerm(ast, 'console.log') // matches `console.log`
  * matchTerm(ast, 'console.?')   // matches `console[anything]`
  * ```
+ * @param {object} ast
  * @param {string[]} names
  **/
 function matchTerm(ast, ...names) {
@@ -203,10 +204,7 @@ function isAssertEqual(ast) {
   return matchTerm(ast,
     'assert.equal',
     'assert.deepEqual',
-    'assert.strictEqual',
-    'Test.assertEquals',
-    'Test.assertDeepEquals',
-    'Test.assertStrictEquals',
+    'assert.strictEqual'
   )
 }
 
@@ -366,11 +364,11 @@ const generics = {
   EmptyStatement() {
     return ';'
   },
-  ExpressionStatement({ expression }, i) {
-    return this.indent(i) + this.toCode(expression, i)
+  ExpressionStatement({ expression }, i, ...xs) {
+    return this.indent(i) + this.toCode(expression, i, ...xs) + this.statementTerminator
   },
   FunctionDeclaration(ast, i, ...xs) {
-    return `${this.indent(i)}${this.FunctionExpression(ast, i, ...xs)}\n`
+    return '\n' + this.indent(i) + this.FunctionExpression(ast, i, ...xs) + this.statementTerminator
   },
   elseIfKeyword: 'elseif',
   elseKeyword: 'else',
@@ -435,7 +433,7 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   },
   ifKeyword: 'if ',
   IfStatement(ast, i, parent) {
-    return `${this.indent(i)}${this.IfExpression(ast, i, parent)}`
+    return this.indent(i) + this.IfExpression(ast, i, parent) + this.statementTerminator
   },
   lambdaKeyword: 'function',
   thenKeyword: '',
@@ -502,15 +500,19 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   Property({ key, value }, i) {
     return this.toCode(key, i) + ': ' + this.toCode(value, i)
   },
+  PropertyDefinition(ast, i) {
+    return this.indent(i) + this.Property(ast, i)
+  },
   Program({ body }) {
     return body.map(x => this.toCode(x, 0)).join('\n')
   },
   ReturnStatement({ argument }, i) {
-    return this.indent(i) + 'return ' + this.toCode(argument, i)
+    return this.indent(i) + 'return ' + this.toCode(argument, i) + this.statementTerminator
   },
   SpreadElement(ast) {
     return this.RestElement(ast)
   },
+  statementTerminator: '',
   SwitchStatement(ast, i) {
     const ifStmt = switchStatementToIfStatement(ast)
     if (ifStmt) {
@@ -520,13 +522,17 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
     }
   },
   tabWidth: 2,
+  TemplateElement({ value: { raw } }) {
+    return raw
+  },
   test(ast, i) {
     return this.toCode(ast, i) + this.thenKeyword
   },
   thenKeyword: '',
   ThrowStatement(ast, i) {
     if (this.throwKeyword) {
-      return `${this.indent(i)}${this.throwKeyword} ${this.toCode(ast.argument, i)}`
+      return this.indent(i) + this.throwKeyword + ' ' +
+        this.toCode(ast.argument, i) + this.statementTerminator
     }
     abandon(ast, 'Unimplemented: ThrowStatement')
   },
@@ -759,6 +765,56 @@ const sexpr = {
 }
 Object.setPrototypeOf(sexpr, generics)
 
+// https://criterion.readthedocs.io/en/master/assert_old.html#old-assertions-ref
+// https://en.cppreference.com/w/c/language/operator_precedence precedence matches default
+const C = Object.setPrototypeOf({
+  ArrayExpression({ elements }) {
+    return `{ ${this.list(elements)} }`
+  },
+  CallExpression(ast, i, name) {
+    if (matchTerm(ast.callee, 'assert.?')) {
+      const args = ast.arguments[0].arguments.slice()
+      args.push(ast.arguments[1])
+      if (ast.arguments[2]) args.push(ast.arguments[2])
+      return 'do_test(' + args.map((arg) => this.toCode(arg, i)).join(', ') + ')'
+    } else if (matchTerm(ast.callee, 'it')) {
+      return 'Test(' + name + ', ' + toSnakeCase(ast.arguments[0].value) + ') {\n' +
+        this.body(ast.arguments[1].body.body) + '\n' + this.indent(i) + '}'
+    }
+    return generics.CallExpression.call(this, ast, i)
+  },
+  ExpressionStatement(ast, i, ...xs) {
+    if (matchTerm(ast.expression.callee, 'describe')) {
+      const name = toSnakeCase(ast.expression.arguments[0].value)
+      return ast.expression.arguments[1].body.body.map((it) => this.toCode(it, i, name)).join('\n')
+    }
+    return generics.ExpressionStatement.call(this, ast, i, ...xs)
+  },
+  functionKeyword: 'void',
+  halfBlockOpener: ' {',
+  tabWidth: 4,
+  statementTerminator: ';',
+}, generics)
+
+const Clojure = Object.setPrototypeOf({
+  ArrayExpression(ast) {
+    return generics.ArrayExpression.call(this, ast)
+  },
+  CallExpression(ast, i) {
+    if (isAssertEqual(ast.callee)) {
+      return '(is (= ' + this.toCode(ast.arguments[0]) + ' ' +
+        this.toCode(ast.arguments[1]) + '))'
+    } else if (matchTerm(ast.callee, 'describe')) {
+      return '(deftest ' + toTitleCase(this.toCode(ast.arguments[0])) + '\n' +
+        this.indent(i) + this.body(ast.arguments[1].body.body, i) + ')'
+    } else if (matchTerm(ast.callee, 'it')) {
+      return '(testing ' + this.toCode(ast.arguments[0]) + '\n' + this.body(ast.arguments[1].body.body, i)
+    }
+    return sexpr.CallExpression.call(this, ast, i)
+  },
+  tabWidth: 2,
+}, sexpr)
+
 const CommonLisp = {
   assignmentKeyword: 'setf',
   boolTrue: 't',
@@ -888,6 +944,160 @@ const CommonLisp = {
 }
 Object.setPrototypeOf(CommonLisp, sexpr)
 
+const Crystal = {
+  // https://crystal-lang.org/reference/1.12/syntax_and_semantics/operators.html#operator-precedence
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    "<": 4,
+    "<=": 4,
+    ">": 4,
+    ">=": 4,
+    "==": 5,
+    "!=": 5,
+    "===": 5,
+    "!==": 5,
+    "|": 6,
+    "^": 6,
+    "&": 7,
+  }, generics.binaryOperatorPrecedence),
+  CallExpression(ast, i) {
+    if (isAssertEqual(ast.callee)) {
+      return this.toCode(ast.arguments[0]) + '.should eq ' + this.toCode(ast.arguments[1])
+    } else if (matchTerm(ast.callee, 'describe', 'it')) {
+      return this.toCode(ast.callee, i) + ' ' + this.toCode(ast.arguments[0], i) +
+        ' ' + this.toCode(ast.arguments[1], i)
+    }
+    return Ruby.CallExpression.call(this, ast, i)
+  },
+  FunctionExpression(ast, i) {
+    if (ast.id === null) {
+      return this.ArrowFunctionExpression(ast, i)
+    }
+    return Ruby.FunctionExpression.call(this, ast, i)
+  },
+}
+
+const Forth = Object.setPrototypeOf({
+  CallExpression(ast, i) {
+    if (matchTerm(ast.callee, 'describe', 'it')) {
+      return this.toCode(ast.arguments[0]) + ' ' + ast.callee.name + '#{\n' +
+        this.body(ast.arguments[1].body.body, i) + '\n' + this.indent(i) + '}#'
+    } else if (isAssertEqual(ast.callee)) {
+      return '<{ ' + this.toCode(ast.arguments[0]) + ' -> ' + this.toCode(ast.arguments[1]) + ' }>'
+    }
+    return [...ast.arguments, ast.callee].map((x) => this.toCode(x, i)).join(' ')
+  },
+  BinaryExpression({ left, operator, right }) {
+    return this.toCode(left) + ' ' + this.toCode(right) + ' ' + this.toOperator(operator)
+  },
+  FunctionExpression(ast, i) {
+    const { async, body, generator, id, params } = ast
+    if (async) console.warn('Forth: ignoring async.')
+    if (generator) abandon(ast, 'Forth: generators not supported.')
+    if (!id) abandon(ast, 'Forth: anonymous functions not supported')
+    return ': ' + this.toCode(id) + ' { ' + params.map((p) => this.toCode(p)).join(' ') +
+      ' --' + (body.body.some(stmt => stmt.type === 'ReturnStatement') ? ' rslt' : '') +
+      ' }\n' + this.body(body.body, i) + '\n' + this.indent(i) + ';'
+  },
+  Identifier({ name }) {
+    return toKebabCase(name)
+  },
+  Literal(ast, ...xs) {
+    if (typeof ast.value === 'string') {
+      // TODO handle escape codes
+      return 's"' + ast.value.replace(/\\?"/g, '""') + '"'
+    }
+    return generics.Literal.call(this, ast, ...xs)
+  },
+  ReturnStatement({ argument }, i) {
+    return this.indent(i) + this.toCode(argument, i)
+  },
+}, generics)
+
+const Haskell = Object.setPrototypeOf({
+  // https://rosettacode.org/wiki/Operator_precedence#Haskell
+  binaryOperatorPrecedence: Object.setPrototypeOf({
+    "<": 7,
+    "<=": 7,
+    ">": 7,
+    ">=": 7,
+  }, generics.binaryOperatorPrecedence),
+  body(body, i) {
+    if (body.length === 1 && body[0].type === 'ReturnStatement') {
+      return this.toCode(body[0].argument)
+    }
+    return 'do\n' + generics.body.call(this, body, i)
+  },
+  CallExpression(ast, i) {
+    if (isAssertEqual(ast.callee)) {
+      return this.toCode(ast.arguments[0]) + ' `shouldBe` ' + this.toCode(ast.arguments[1])
+    }
+    const args = ast.arguments.map((x) => x?.type === 'CallExpression' ? '(' + this.toCode(x, i) + ')' : this.toCode(x, i))
+    if (matchTerm(ast.callee, 'describe')) {
+      args[0] = (i === 0 ? 'spec :: Spec\n' + this.indent(i) : '')
+      args[0] += 'spec ='
+    } else if (matchTerm(ast.callee, 'it')) {
+      args.unshift(this.toCode(ast.callee))
+      args.splice(2, 0, '$')
+    } else {
+      args.unshift(this.toCode(ast.callee))
+    }
+    return args.join(' ')
+  },
+  FunctionDeclaration(ast, i, ...xs) {
+    return '\n' + this.indent(i) + this.toCode(ast.id) + ' :: ' +
+      Array.from({ length: ast.params.length + 1 }, (_, i) => String.fromCharCode(i + 97)).join(' -> ') +
+      '\n' + this.indent(i) + this.FunctionExpression(ast, i, ...xs)
+  },
+  FunctionExpression(ast, i) {
+    const body = this.body(ast.body.body, i)
+    if (ast.id === null) {
+      return body
+    }
+    return this.toCode({
+      type: 'CallExpression',
+      callee: ast.id,
+      arguments: ast.params
+    }) + ' = ' + body
+  },
+  Literal(ast, i) {
+    if (typeof ast.value === 'string' && ast.value.length === 1) {
+      return `'${ast.raw.slice(1, -1)}'`
+    }
+    return generics.Literal.call(this, ast, i)
+  },
+  tabWidth: 2,
+}, generics)
+
+const Java = Object.setPrototypeOf({
+  // TODO operator precedence
+  CallExpression(ast, i) {
+    if (isAssertEqual(ast.callee)) {
+      return 'assertEquals(' + [
+        ast.arguments[1],
+        ast.arguments[0],
+        ...ast.arguments.slice(2)
+      ].map((arg) => this.toCode(arg, i)).join(', ') + ')'
+      // } else if (isAssertTrue(ast.callee)) {
+      // return 'assertTrue'
+      // } else if (isAssertFalse(ast.callee)) {
+
+    } else if (matchTerm(ast.callee, 'describe')) {
+      return 'public class ' + toTitleCase(this.toCode(ast.arguments[0])) + ' {\n' +
+        this.body(ast.arguments[1].body.body, i) + '\n}'
+    } else if (matchTerm(ast.callee, 'it')) {
+      return '@Test\n' + this.indent(i) + 'public void ' + toCamelCase(ast.arguments[0].value) + '() {\n' +
+        this.body(ast.arguments[1].body.body, i) + '\n' + this.indent(i) + '}'
+    }
+    return generics.CallExpression.call(this, ast, i)
+  },
+  ExpressionStatement({ expression }, i, ...xs) {
+    const code = this.indent(i) + this.toCode(expression, i, ...xs)
+    if (matchTerm(expression.callee, 'describe', 'it')) return code
+    return code + this.statementTerminator
+  },
+  statementTerminator: ';',
+}, generics)
+
 const JavaScript = {
   ArrowFunctionExpression({ body, params }, i) {
     return `(${this.list(params)}) => ${this.toCode(body, i)}`
@@ -906,7 +1116,7 @@ const JavaScript = {
     }
   },
   BreakStatement({ label }, i) {
-    return this.indent(i) + 'break' + (label ? ' ' + label.name : '')
+    return this.indent(i) + 'break' + (label ? ' ' + label.name : '') + this.statementTerminator
   },
   ClassBody({ body }, i) {
     return `{
@@ -918,18 +1128,29 @@ ${this.indent(i)}}
     return `class ${this.toCode(id)}${superClass ? ` extends ${this.toCode(superClass)}` : ''} ${this.toCode(body, i)}`
   },
   ContinueStatement({ label }, i) {
-    return this.indent(i) + 'continue' + (label ? ' ' + label.name : '')
+    return this.indent(i) + 'continue' + (label ? ' ' + label.name : '') + this.statementTerminator
   },
   DebuggerStatement(_, i) {
-    return `${this.indent(i)}debugger`
+    return this.indent(i) + 'debugger' + this.statementTerminator
   },
   DoWhileStatement({ body, test }, i) {
     return `${this.indent(i)}do ${this.toCode(body, i)} while ${this.test(test)}`
   },
   elseKeyword: '} else {',
   elseIfKeyword: '} else if',
+  ExpressionStatement(ast, i, ...xs) {
+    if (this.statementTerminator !== '') {
+      return generics.ExpressionStatement.call(this, ast, i, ...xs)
+    }
+    const { expression } = ast
+    let result = this.indent(i)
+    if (expression.type === 'AssignmentExpression' && expression.left.type === 'ArrayPattern') {
+      result += ';'
+    }
+    return result + this.toCode(expression, i, ...xs)
+  },
   ExportNamedDeclaration({ declaration }, i) {
-    return `export ${this.toCode(declaration, i)}`
+    return 'export ' + this.toCode(declaration, i)
   },
   ForStatement({ body, init, test, update }, i) {
     return this.indent(i) + `for (${this.toCode(init)}; ${this.toCode(test, i)}; ${this.toCode(update, i)}) ${this.toCode(body, i)}`
@@ -943,6 +1164,27 @@ ${this.indent(i)}}
   generatorKeyword: 'function*',
   halfBlockOpener: ' {',
   Identifier: ({ name }) => name[0] + toCamelCase(name.slice(1)),
+  ImportDeclaration({ source, specifiers }, i) {
+    let specifiersCode = specifiers.map((s) => this.toCode(s, i)).join(', ')
+    if (specifiers[0].type === 'ImportSpecifier') {
+      specifiersCode = '{ ' + specifiersCode + ' }'
+    }
+    return 'import ' + specifiersCode + ' from ' + this.toCode(source, i) + this.statementTerminator
+  },
+  ImportNamespaceSpecifier({ local }) {
+    return '* as ' + this.toCode(local)
+  },
+  ImportDefaultSpecifier({ local }) {
+    return this.toCode(local)
+  },
+  ImportSpecifier({ imported, local }, i) {
+    const importedCode = this.toCode(imported, i)
+    const localCode = this.toCode(local, i)
+    if (importedCode === localCode) {
+      return localCode
+    }
+    return importedCode + ' as ' + localCode
+  },
   LabeledStatement({ body, label }, i) {
     return `${this.indent(i)}${label.name}:\n${this.toCode(body, i)}`
   },
@@ -975,6 +1217,17 @@ ${this.indent(i)}}
   },
   NewExpression(ast, i) {
     return `new ${toTitleCase(this.toCode(ast.callee, i))}(${this.list(ast.arguments, i)})`
+  },
+  ObjectPattern({ properties }, i) {
+    return '{ ' + properties.map((prop) => this.toCode(prop, i)).join(', ') + ' }'
+  },
+  Property({ key, value }, i) {
+    const keyCode = this.toCode(key, i)
+    const valueCode = this.toCode(value, i)
+    if (keyCode === valueCode) {
+      return valueCode
+    }
+    return keyCode + ': ' + valueCode
   },
   PrivateIdentifier({ name }) {
     return '#' + name
@@ -1012,9 +1265,6 @@ ${this.list(consequent, i + 1, '\n')}`
   },
   SwitchStatement({ cases, discriminant, }, i) {
     return `${this.indent(i)}switch (${this.toCode(discriminant)}) {\n${this.list(cases, i + 1, '\n')}\n${this.indent(i)}}`
-  },
-  TemplateElement({ value: { raw } }) {
-    return raw
   },
   TemplateLiteral({ expressions, quasis }) {
     const result = ['`', this.toCode(quasis[0])]
@@ -1056,7 +1306,7 @@ ${this.list(consequent, i + 1, '\n')}`
     return this.toCode(id, i) + (init ? ' = ' + this.toCode(init) : '')
   },
   VariableDeclaration({ kind, declarations }, i) {
-    return `${this.indent(i)}${kind} ${this.list(declarations)}`
+    return this.indent(i) + kind + ' ' + this.list(declarations) + this.statementTerminator
   },
   whileOpener: ' {',
   yieldDelegateKeyword: 'yield*',
@@ -1114,17 +1364,41 @@ const Julia = {
     return this.indent(i) + (label ? `@goto ${label.name}` : 'break')
   },
   CallExpression(ast, i) {
-    if (ast.callee.type === 'MemberExpression' && ast.callee.object.name === 'assert' ||
-      ast.callee.type === 'Identifier' && /assert_?(deep|strict)_?equals?/i.test(ast.callee.name)) {
-      const lhs = this.toCode(ast.arguments[0])
-      const rhs = this.toCode(ast.arguments[1])
-      if (ast.callee.property.name === 'throws') {
-        return `@fact_throws ${lhs} ${ast.arguments[1] ? rhs : ''} `
-      } else if (ast.arguments[1].type !== 'CallExpression') {
-        return `@fact ${lhs} --> ${rhs}`
-      } else {
-        return `expected = ${rhs}
-${this.indent(i)}@fact ${lhs} --> expected "${this.toCode(ast.arguments[0].callee)}(${ast.arguments[0].arguments.length ? '$(repr(' + ast.arguments[0].arguments.map((arg) => this.toCode(arg)).join(')), $(repr(') + ')' : ''})) --> $(repr(expected))"`
+    if (matchTerm(ast.callee, 'assert.?')) {
+      const args = ast.arguments.map((arg) => this.toCode(arg, i))
+      if (matchTerm(ast.callee, 'assert.throws')) {
+        return '@fact_throws ' + args.join(' ')
+      } else if (isAssertEqual(ast.callee, i)) {
+        const isGround = (x) => x.type.endsWith('Literal') || (x.type === 'CallExpression' && x.arguments.every(isGround))
+        let result = '@fact ' + args[0] + ' --> '
+        if (isGround(ast.arguments[0]) && isGround(ast.arguments[1])) {
+          return result + args.slice(1).join(' ')
+        } else if (ast.arguments[1].type === 'CallExpression') {
+          result = 'expected = ' + args[1] + '\n' + this.indent(i) + result + 'expected'
+        } else {
+          result += args[1]
+        }
+        result += ' "'
+        if (ast.arguments[0].type === 'Identifier') {
+          result += '$(repr(' + args[0] + '))'
+        } else if (ast.arguments[0].type === 'CallExpression') {
+          result += this.toCode(ast.arguments[0].callee) + '(' +
+            ast.arguments[0].arguments.map((arg) => {
+              const code = this.toCode(arg, i)
+              return isGround(arg) ? code : '$(repr(' + code + '))'
+            }).join(', ') + ')'
+        } else {
+          result += args[0]
+        }
+        result += ' --> '
+        if (ast.arguments[1].type === 'CallExpression') {
+          result += '$(repr(expected))"'
+        } else if (ast.arguments[1].type === 'Literal' && !(typeof ast.arguments[1].value === 'string')) {
+          result += args[1] + '"'
+        } else {
+          result += '$(repr(' + args[1] + '))"'
+        }
+        return result
       }
     } else if (ast.callee.type === 'MemberExpression') {
       if (isFloorDivideToZero(ast)) {
@@ -1278,10 +1552,11 @@ ${this.indent(i)}end\n`
   },
   Literal(ast, i) {
     if (typeof ast.value === 'bigint') {
-      return `big"${ast.raw.slice(0, -1)}"`
-    } else {
-      return generics.Literal.call(this, ast, i)
+      return 'big"' + ast.raw.slice(0, -1) + '"'
+    } else if (typeof ast.value === 'string' && ast.value.length === 1) {
+      return "'" + ast.raw.slice(1, -1) + "'"
     }
+    return generics.Literal.call(this, ast, i)
   },
   MemberExpression(ast, i) {
     if (ast.property.name === 'length') {
@@ -2098,6 +2373,7 @@ const Prolog = Object.setPrototypeOf({
     }
     return generics.BinaryExpression.call(this, ast, ...xs)
   },
+  // binaryOperatorPrecedence: TODO,
   blockOpener: '',
   blockCloser: '',
   body(body, i = 0, ...xs) {
@@ -2403,14 +2679,22 @@ const Python = Object.setPrototypeOf({
   },
   boolTrue: 'True',
   boolFalse: 'False',
-  CallExpression(ast, ...xs) {
+  CallExpression(ast, i, ...xs) {
     if (isFloorDivideToZero(ast)) {
       console.warn('Python: Division rounding to zero may round to negative infinity.')
       return this.toCode({ ...ast.arguments[0], operator: '//' })
     } else if (isFloorDivideToNegativeInfinity(ast)) {
       return this.toCode({ ...ast.arguments[0], operator: '//' })
+    } else if (matchTerm(ast.callee, 'describe', 'it')) {
+      const arg0 = this.toCode(ast.arguments[0])
+      return '@test.' + ast.callee.name + '(' + arg0 + ')\n' +
+        this.indent(i) + this.FunctionExpression({ ...ast.arguments[1], id: { name: toSnakeCase(arg0), type: 'Identifier' } }, i, 'def') + '\n'
+    } else if (isAssertTrue(ast)) {
+      return 'test.expect(' + this.list(ast.arguments) + ')'
+    } else if (matchTerm('assert.throws')) {
+      return 'test.expect_error(' + this.list(ast.arguments) + ')'
     }
-    return generics.CallExpression.call(this, ast, ...xs)
+    return generics.CallExpression.call(this, ast, i, ...xs)
   },
   ClassDeclaration(ast, i) {
     const { body, id, superClass } = ast
@@ -2459,6 +2743,12 @@ ${this.body(body.body, i)}`
   functionKeyword: 'def',
   generatorKeyword: 'def',
   halfBlockOpener: ':',
+  Identifier({ name }) {
+    if (name[0] === name[0].toUpperCase()) {
+      return toTitleCase(name)
+    }
+    return toSnakeCase(name)
+  },
   MemberExpression(ast, i) {
     if (ast.object.name === 'console') {
       return 'print'
@@ -2466,6 +2756,8 @@ ${this.body(body.body, i)}`
       return `len(${this.toCode(ast.object)})`
     } else if (ast.property.name === 'toString') {
       return `str(${this.toCode(ast.object)})`
+    } else if (isAssertEqual(ast)) {
+      return 'test.assert_equals'
     } else {
       return generics.MemberExpression.call(this, ast, i)
     }
@@ -2530,9 +2822,6 @@ ${this.indent(i)}`
     } else {
       return keyStr
     }
-  },
-  PropertyDefinition(ast, i) {
-    return this.indent(i) + this.Property(ast, i)
   },
   RegExpLiteral(ast) {
     const { flags, pattern } = ast
@@ -2780,12 +3069,18 @@ const Ruby = Object.setPrototypeOf({
     "instanceof": 13,
   }, generics.binaryOperatorPrecedence),
   CallExpression(ast, i) {
-    if (ast.callee.type === 'MemberExpression' && ast.arguments.length === 0) {
+    if (ast.arguments.length === 0) {
       return this.toCode(ast.callee, i)
     } else if (isFloorDivideToZero(ast)) {
       return '(' + this.toCode(ast.arguments[0], i) + ').floor'
     } else if (isFloorDivideToNegativeInfinity(ast)) {
       return this.toCode(ast.arguments[0].left, i) + '.div(' + this.toCode(ast.arguments[0].right, i) + ')'
+    } else if (isAssertEqual(ast.callee)) {
+      const result = 'expect(' + this.toCode(ast.arguments[0]) + ').to eq(' + this.toCode(ast.arguments[1]) + ')'
+      if (ast.arguments[2]) {
+        return result + ', ' + this.toCode(ast.arguments[2])
+      }
+      return result
     }
     return generics.CallExpression.call(this, ast, i)
   },
@@ -2809,9 +3104,12 @@ const Ruby = Object.setPrototypeOf({
   FunctionDeclaration(...xs) {
     return Julia.FunctionDeclaration.call(this, ...xs)
   },
+  Identifier({ name }) {
+    return toSnakeCase(name)
+  },
   lambdaKeyword: 'do',
   MemberExpression(ast, i) {
-    if (ast.object?.name === 'console') {
+    if (matchTerm(ast, 'console.?')) {
       return 'puts'
     }
     return generics.MemberExpression.call(this, ast, i)
@@ -2847,6 +3145,14 @@ const Ruby = Object.setPrototypeOf({
   RestElement({ argument }) {
     return `*${this.toCode(argument)}`
   },
+  TemplateLiteral({ expressions, quasis }) {
+    const result = ['"', this.toCode(quasis[0])]
+    for (let i = 1; i < quasis.length; ++i) {
+      result.push('#{' + this.toCode(expressions[i - 1]) + '}', this.toCode(quasis[i]))
+    }
+    result.push('"')
+    return result.join('')
+  },
   ThrowStatement({ argument }, i) {
     if (!argument) {
       return `${this.indent(i)}raise`
@@ -2873,6 +3179,48 @@ const Ruby = Object.setPrototypeOf({
     return Lua.UpdateExpression.call(this, ...xs)
   },
 }, generics)
+Object.setPrototypeOf(Crystal, Ruby)
+
+const TypeScript = {
+  Literal(literal) {
+    if (typeof literal.value == 'string') {
+      if (literal.raw[0] === '"') {
+        return literal.raw
+      } else {
+        return '"' + literal.raw.slice(1, -1).replaceAll('"', '\\"').replaceAll(/\\'/g, "'") + '"'
+      }
+    }
+    return JavaScript.Literal.call(this, literal)
+  },
+  statementTerminator: ';',
+  VariableDeclaration(ast, i) {
+    if (ast.declarations.length === 1 && ast.declarations[0].init?.type === 'CallExpression'
+      && ast.declarations[0].init.callee.name === 'require') {
+      if (ast.declarations[0].id.type === 'Identifier') {
+        return this.toCode({
+          source: ast.declarations[0].init.arguments[0],
+          specifiers: [{
+            local: ast.declarations[0].id,
+            type: 'ImportDefaultSpecifier',
+          }],
+          type: 'ImportDeclaration',
+        })
+      } else {
+        return this.toCode({
+          source: ast.declarations[0].init.arguments[0],
+          specifiers: ast.declarations[0].id.properties.map(({ key, value }) => ({
+            local: key,
+            imported: value,
+            type: 'ImportSpecifier',
+          })),
+          type: 'ImportDeclaration',
+        })
+      }
+    }
+    return JavaScript.VariableDeclaration.call(this, ast, i)
+  },
+}
+Object.setPrototypeOf(TypeScript, JavaScript)
 
 /** @param {string} str */
 function toWordParts(str) {
@@ -2910,7 +3258,7 @@ function toTitleCase(str) {
   return toWordParts(str).map(toUpperCaseFirst).join()
 }
 
-export const languages = { 'Common Lisp': CommonLisp, JavaScript, Julia, Lua, Nim, Prolog, Python, Racket, Ruby }
+export const languages = { C, Clojure, 'Common Lisp': CommonLisp, Crystal, Forth, Haskell, Java, JavaScript, Julia, Lua, Nim, Prolog, Python, Racket, Ruby, TypeScript }
 
 /** @type {Record<string,{(code: string) => { type: 'Program', body: {}[] }}>}*/
 export const from = {
@@ -2919,36 +3267,26 @@ export const from = {
   },
 }
 
-export const to = new Proxy({
-  camelCase: toCamelCase,
-  snakeCase: toSnakeCase,
-  titleCase: toTitleCase,
-  kebabCase: toKebabCase,
-}, {
-  get(target, prop, __) {
-    if (prop in target) {
-      return target[prop]
-    } else if (prop in languages) {
-      return languages[prop].toCode.bind(languages[prop])
-    } else {
-      console.log(prop)
-    }
-  }
-})
-
 async function cli() {
   const extToLang = {
-    js: "JavaScript",
-    jl: "Julia",
-    lisp: "Common Lisp",
-    lua: "Lua",
-    nim: "Nim",
-    pl: "Prolog",
-    py: "Python",
-    rb: "Ruby",
-    rkt: "Racket",
-    scm: "Racket",
-    ts: "JavaScript",
+    '4th': 'Forth',
+    c: 'C',
+    clj: 'Clojure',
+    cr: 'Crystal',
+    hs: 'Haskell',
+    java: 'Java',
+    js: 'JavaScript',
+    jl: 'Julia',
+    lisp: 'Common Lisp',
+    lua: 'Lua',
+    nim: 'Nim',
+    pl: 'Prolog',
+    pro: 'Prolog',
+    py: 'Python',
+    rb: 'Ruby',
+    rkt: 'Racket',
+    scm: 'Racket',
+    ts: 'TypeScript',
   }
 
   const args = {
@@ -2983,22 +3321,22 @@ async function cli() {
     return
   }
 
-  const decoder = new TextDecoder("utf-8")
+  const decoder = new TextDecoder('utf-8')
 
   if (!args.to) {
-    args.to = "Julia"
+    args.to = 'Julia'
   } else if (args.to.toLowerCase?.() in extToLang) {
     args.to = extToLang[args.to.toLowerCase()]
   }
 
   if (args._.length === 0) {
     console.log(
-      to[args.to](from.JavaScript(decoder.decode(await readAll(Deno.stdin)))),
+      languages[args.to].toCode(from.JavaScript(decoder.decode(await readAll(Deno.stdin))))
     )
   } else {
     for (const filename of args._) {
       console.log(
-        to[args.to](decoder.decode(Deno.readFileSync(filename))),
+        languages[args.to].toCode(decoder.decode(Deno.readFileSync(filename))),
       )
     }
   }

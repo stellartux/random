@@ -74,7 +74,7 @@ describe("the function", function(){
     <button id="convert">Convert Clipboard</button><button id="copy">Copy</button>
   </main>
   <script type="module">
-    import { AbandonError, from, languages, to } from './kata-cruncher.js'
+    import { AbandonError, from, languages } from './kata-cruncher.js'
 
     /** @type {HTMLTextAreaElement} */
     const input = document.getElementById('input')
@@ -224,6 +224,16 @@ describe("the function", function(){
           break
 
         case 'CallExpression':
+          if (ast.callee.object?.name === 'Test' &&
+            ast.callee.property.name === 'expect' &&
+            ast.arguments[0].type === 'BinaryExpression' &&
+            (ast.arguments[0].operator === '==' || ast.arguments[0].operator === '===')
+          ) {
+            ast.callee.object.name = 'assert'
+            ast.callee.property.name = ast.arguments[0].operator === '==' ? 'equal' : 'strictEqual'
+            const { left, right } = ast.arguments.shift()
+            ast.arguments.unshift(left, right)
+          }
           normalize(ast.callee)
           ast.arguments.forEach(normalize)
           break
@@ -322,10 +332,16 @@ describe("the function", function(){
     }
 
     const preamble = {
+      C: '#include <criterion/criterion.h>\n\n',
+      Clojure: '(ns solution-test\n  (:require [clojure.test :refer :all]\n            [solution :refer [solution]]))\n\n',
       'Common Lisp': '(in-package #:cl-user)\n(defpackage #:challenge/tests/solution\n(:use #:cl #:rove #:challenge/solution))\n(in-package #:challenge/tests/solution)\n(defun displayln (s) (prin1 s) (terpri))\n\n',
-      JavaScript: "const assert = require('chai').assert\n\n",
+      Haskell: 'module SolutionSpec (spec) where\n\nimport Solution (solution)\nimport Test.Hspec\n\n',
+      Java: 'import org.junit.Test;\nimport static org.junit.Assert.*;\n\n',
+      JavaScript: "const { assert } = require('chai')\n\n",
       Julia: 'using FactCheck\n\n',
       Lua: 'local SOLUTION = require "solution"\n\n',
+      Python: 'import codewars_test as test\nfrom solution import SOLUTION\n\n',
+      TypeScript: 'import { assert } from "chai";\nimport { SOLUTION } from "./solution";\n\n'
     }
 
     /**
@@ -342,7 +358,7 @@ describe("the function", function(){
         showPreamble = false,
       } = typeof (options) === 'object' ? options : { outputLanguage: options }
       return (showPreamble && preamble[outputLanguage] || '') +
-        to[outputLanguage](normalize(from[inputLanguage](input)))
+        languages[outputLanguage].toCode(normalize(from[inputLanguage](input.replace(/should works for/g, 'should work for')))).replace(/^\s+/g, '')
     }
 
   </script>
