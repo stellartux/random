@@ -80,6 +80,18 @@ function matchTerm(ast, ...names) {
   return false
 }
 
+/** Is a literal, an array of ground exprs, or a call expression of ground exprs */
+function isGround(ast) {
+  if (ast.type === 'ArrayExpression') {
+    return ast.elements.every(isGround)
+  } else if (ast.type.endsWith('Literal')) {
+    return true
+  } else if (ast.type === 'CallExpression') {
+    return ast.arguments.every(isGround)
+  }
+  return false
+}
+
 function isIteratorInitializer({ computed, key, type }) {
   return type === 'MethodDefinition'
     && computed
@@ -1369,7 +1381,6 @@ const Julia = {
       if (matchTerm(ast.callee, 'assert.throws')) {
         return '@fact_throws ' + args.join(' ')
       } else if (isAssertEqual(ast.callee, i)) {
-        const isGround = (x) => x.type.endsWith('Literal') || (x.type === 'CallExpression' && x.arguments.every(isGround))
         let result = '@fact ' + args[0] + ' --> '
         if (isGround(ast.arguments[0]) && isGround(ast.arguments[1])) {
           return result + args.slice(1).join(' ')
@@ -1752,17 +1763,34 @@ const Lua = {
         }
       } else if (object.name === 'assert') {
         const args = ast.arguments.map((arg) => this.toCode(arg, i))
+        let fmt = '"' + args[0] + '"'
+        if (!isGround(ast.arguments[0])) {
+          const fargs = []
+          const fstring = (ast) => {
+            if (ast.type === 'CallExpression') {
+              return this.toCode(ast.callee) + '(' + ast.arguments.map(fstring).join(', ') + ')'
+            } else if (ast.type === 'ArrayExpression') {
+              return '{ ' + ast.elements.map(fstring).join(', ') + ' }'
+            } else if (ast.type === 'Identifier') {
+              fargs.push(this.toCode(ast))
+              return '%s'
+            } else {
+              return this.toCode(ast)
+            }
+          }
+          fmt = '("' + fstring(ast.arguments[0]) + '"):format(' + fargs.join(', ') + ')'
+        }
         if (/^(expect(_?similar)?|(strict_?)?equals?)$/i.test(property.name)) {
           [args[0], args[1]] = [args[1], args[0]]
-          return `assert.equal(${args.join(', ')})`
+          return `assert.equal(${args.join(', ')}, ${fmt})`
         } else if (/deep_?equals?/i.test(property.name)) {
           [args[0], args[1]] = [args[1], args[0]]
-          return `assert.same(${args.join(', ')})`
+          return `assert.are.same(${args.join(', ')}, ${fmt})`
         } else if (/not_?equals?/i.test(property.name)) {
           [args[0], args[1]] = [args[1], args[0]]
-          return `assert.are_not.equal(${args.join(', ')})`
+          return `assert.are_not.equal(${args.join(', ')}, ${fmt})`
         } else if (/throws?|errors?/i.test(property.name)) {
-          return `assert.has_error(${args.join(', ')})`
+          return `assert.has_error(${args.join(', ')}, ${fmt})`
         } else {
           console.warn(`assert.${property.name}`)
         }
@@ -1925,7 +1953,7 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     if (Object.hasOwn(keys, name)) {
       return keys[name]
     }
-    return name[0] === name[0].toLowerCase() ? toCamelCase(name) : toTitleCase(name)
+    return name[0] === name[0].toLowerCase() ? toSnakeCase(name) : toTitleCase(name)
   },
   LabeledStatement({ body, label }, i) {
     return `${this.toCode(body, i)}\n${this.indent(i)}::${label.name}::`
