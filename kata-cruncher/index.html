@@ -230,9 +230,14 @@ describe("the function", function(){
               (ast.arguments[0].operator === '==' || ast.arguments[0].operator === '===')
             ) {
               ast.callee.object.name = 'assert'
-              ast.callee.property.name = ast.arguments[0].operator === '==' ? 'equal' : 'strictEqual'
               const { left, right } = ast.arguments.shift()
-              ast.arguments.unshift(left, right)
+              if (right.type === 'Literal' && typeof right.value === 'boolean') {
+                ast.callee.property.name = right.value ? 'isTrue' : 'isFalse'
+                ast.arguments.unshift(left)
+              } else {
+                ast.callee.property.name = ast.arguments[0].operator === '==' ? 'equal' : 'strictEqual'
+                ast.arguments.unshift(left, right)
+              }
             } else if (ast.callee.property.name === 'assert_equals') {
               ast.callee.object.name = 'assert'
               ast.callee.property.name = 'strictEqual'
