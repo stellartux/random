@@ -358,6 +358,10 @@ const generics = {
   CallExpression(ast, i) {
     return `${this.toCode(ast.callee)}(${ast.arguments.map((x) => this.toCode(x, i)).join(', ')})`
   },
+  ChainExpression({ expression }, ...xs) {
+    console.warn('Ignoring nullish coalescence (mapping "?." to ".")')
+    return this.toCode(expression, ...xs)
+  },
   ConditionalExpression({ alternate, consequent, test }, i) {
     return `${this.toCode(test, i)} ${this.conditionThen} ${this.toCode(consequent, i)} ${this.conditionElse} ${this.toCode(alternate, i)}`
   },
@@ -485,13 +489,13 @@ ${this.body(body.body, i, ast)}${this.blockClose(i)}`
   LogicalExpression(ast, i) {
     return this.BinaryExpression(ast, i)
   },
-  MemberExpression({ computed, object, property }, i) {
+  MemberExpression({ computed, object, property }, i, joiner = '.') {
     if (object.name === 'Test') {
       return this.toCode(property, i)
     } else if (computed) {
-      return `${this.toCode(object, i)}[${this.toCode(property, i)}]`
+      return this.toCode(object, i) + (joiner === '?.[' ? joiner : '[') + this.toCode(property, i) + ']'
     } else {
-      return `${this.toCode(object, i)}.${this.toCode(property, i)}`
+      return this.toCode(object, i) + joiner + this.toCode(property, i)
     }
   },
   null: 'null',
@@ -1129,6 +1133,9 @@ const JavaScript = {
   },
   BreakStatement({ label }, i) {
     return this.indent(i) + 'break' + (label ? ' ' + label.name : '') + this.statementTerminator
+  },
+  ChainExpression({ expression }, i) {
+    return this.MemberExpression(expression, i, '?.')
   },
   ClassBody({ body }, i) {
     return `{
@@ -1792,11 +1799,15 @@ const Lua = {
         } else if (/throws?|errors?/i.test(property.name)) {
           return `assert.has_error(${args.join(', ')}, ${fmt})`
         } else {
-          console.warn(`assert.${property.name}`)
+          if (!/is_?(tru|fals)e/i.test(property.name)) {
+            console.warn(`assert.${property.name}`)
+          }
         }
       } else if (property.name === 'toString') {
         return `tostring(${this.toCode(object)})`
       }
+    } else if (ast.callee.name === 'structuredClone') {
+      return '{ table.unpack(' + this.toCode(ast.arguments[0]) + ') }'
     }
     return generics.CallExpression.call(this, ast, i)
   },
@@ -1883,6 +1894,7 @@ ${this.indent(i)}until ${this.toCode(not(test), i)}`
     if (isNumericalForStatement(ast)) {
       if (test.operator[0] === '<' || test.operator[0] === '>') {
         return [
+          this.indent(i),
           'for ',
           this.toCode(init.declarations[0]),
           ', ',
@@ -2411,8 +2423,9 @@ const Prolog = Object.setPrototypeOf({
     const { callee } = ast
     if (matchTerm(callee, 'describe')) {
       const name = toSnakeCase(ast.arguments[0].value.replace(/^\W+|\W+$/g, ''))
-      return `begin_tests(${name}).
+      return `% :- include(preloaded).
 :- include(${name}).
+begin_tests(${name}).
 
 ${ast.arguments[1].body.body.map((x) => this.toCode(x)).join('\n')}
 
@@ -3252,7 +3265,7 @@ Object.setPrototypeOf(TypeScript, JavaScript)
 
 /** @param {string} str */
 function toWordParts(str) {
-  return str.match(/\d+|[A-Z]+(?![a-z])|[A-Z]?[a-z]+/g) || ['']
+  return str.match(/^.\d*$|\$|\d+|[A-Z]+(?![a-z])|[A-Z]?[a-z]+/g) || ['']
 }
 
 /** @param {string} str */
