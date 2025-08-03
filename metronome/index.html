@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset='utf-8'>
+<title>Metronome</title>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<style>
+:root {
+  color-scheme: dark light;
+  font-family: sans-serif;
+}
+
+body {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  margin: 4ch;
+}
+
+button {
+  padding: 2ch 4ch;
+  margin: 2ch;
+  width: 100%
+}
+
+output {
+  min-width: 8ch;
+  align-self: end;
+  text-align: right;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  margin: 1ch;
+}
+
+div {
+  display: flex;
+}
+
+@media (aspect-ratio > 16 / 5) or (height < 40ch) {
+  body {
+    flex-direction: row;
+  }
+}
+</style>
+</head>
+
+<body>
+<label>Volume
+<output id="volume-output">70%</output>
+<input id="volume-input" type="range" min="0" max="100" step="1" value="70" />
+</label>
+<label>Tempo
+<output id="bpm-output">120 bpm</output>
+<input id="bpm-input" type="range" min="0" max="100" step="any" value="50" />
+</label>
+<div>
+<button id="start">Start</button>
+<button id="stop">Stop</button>
+</div>
+<script>
+const /** @type {HTMLInputElement}  */ volumeInput = document.getElementById('volume-input')
+const /** @type {HTMLOutputElement} */ volumeOutput = document.getElementById('volume-output')
+const /** @type {HTMLInputElement}  */ bpmInput = document.getElementById('bpm-input')
+const /** @type {HTMLOutputElement} */ bpmOutput = document.getElementById('bpm-output')
+const /** @type {HTMLButtonElement} */ startButton = document.getElementById('start')
+const /** @type {HTMLButtonElement} */ stopButton = document.getElementById('stop')
+
+let /** @type {AudioContext} */ context
+let /** @type {GainNode} */ gain
+let /** @type {number?} */ callback = null
+let bpm = 120
+let highOrLow = 0
+
+bpmInput.addEventListener('input', () => {
+  bpm = 60 + Math.max(0, Math.min(240, Math.round(0.024 * Number(bpmInput.value) ** 2)))
+  bpmOutput.innerText = bpm.toString() + ' bpm'
+})
+
+volumeInput.addEventListener('input', () => {
+  volumeOutput.innerText = volumeInput.value + '%'
+})
+
+stopButton.addEventListener('click', () => {
+  if (callback !== null) {
+    clearTimeout(callback)
+    callback = null
+    highOrLow = 0
+  }
+})
+
+function beep() {
+  const osc = new OscillatorNode(context, {
+    channelCount: 1,
+    frequency: highOrLow === 0 ? 880 : 880 * 2 / 3
+  })
+  const envelope = new GainNode(context, { gain: 0 })
+  osc.connect(envelope).connect(gain)
+  envelope.gain.exponentialRampToValueAtTime(1, 0.01)
+  envelope.gain.setTargetAtTime(0, context.currentTime + 0.1, 0.08)
+  osc.start()
+  osc.stop(context.currentTime + 1)
+  highOrLow = (highOrLow + 1) % 4
+  callback = setTimeout(beep, 60000 / bpm)
+}
+
+startButton.addEventListener('click', () => {
+  if (!context) {
+    context = new AudioContext({ latencyHint: 'balanced' })
+    gain = new GainNode(context, { gain: Math.max(1, Number(volumeInput.value)) })
+    gain.gain.value = (Number(volumeInput.value) / 100) ** 2
+    volumeInput.addEventListener('input', () => {
+      gain.gain.value = (Number(volumeInput.value) / 100) ** 2
+    })
+    gain
+      .connect(new BiquadFilterNode(context, { type: 'bandpass', frequency: 1200 }))
+      .connect(context.destination)
+  }
+  if (callback === null) {
+    beep()
+  }
+})
+</script>
+</body>
+</html>
