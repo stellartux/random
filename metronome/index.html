@@ -9,6 +9,10 @@
 :root {
   color-scheme: dark light;
   font-family: sans-serif;
+  --base-color: red;
+}
+html {
+  height:85vh;
 }
 
 body {
@@ -42,6 +46,10 @@ div {
   display: flex;
 }
 
+input[type=color] {
+  width: 20%;
+}
+
 @media (aspect-ratio > 16 / 5) or (height < 40ch) {
   body {
     flex-direction: row;
@@ -51,6 +59,7 @@ div {
 </head>
 
 <body>
+<main>
 <label>Volume
 <output id="volume-output">70%</output>
 <input id="volume-input" type="range" min="0" max="100" step="1" value="70" />
@@ -59,21 +68,44 @@ div {
 <output id="bpm-output">120 bpm</output>
 <input id="bpm-input" type="range" min="0" max="100" step="any" value="50" />
 </label>
+<label>Subdivisions
+<output id="bpb-output">4 beats</output>
+<input id="bpb-input" type="range" min="1" max="15" step="1" value="4" />
+</label>
 <div>
 <button id="start">Start</button>
 <button id="stop">Stop</button>
+<input id="color" type="color" value="#ff0000" />
 </div>
+</main>
 <script>
+//@ts-check
+
+//@ts-ignore
 const /** @type {HTMLInputElement}  */ volumeInput = document.getElementById('volume-input')
+//@ts-ignore
 const /** @type {HTMLOutputElement} */ volumeOutput = document.getElementById('volume-output')
+//@ts-ignore
 const /** @type {HTMLInputElement}  */ bpmInput = document.getElementById('bpm-input')
+//@ts-ignore
 const /** @type {HTMLOutputElement} */ bpmOutput = document.getElementById('bpm-output')
+//@ts-ignore
+const /** @type {HTMLInputElement}  */ bpbInput = document.getElementById('bpb-input')
+//@ts-ignore
+const /** @type {HTMLOutputElement} */ bpbOutput = document.getElementById('bpb-output')
+//@ts-ignore
 const /** @type {HTMLButtonElement} */ startButton = document.getElementById('start')
+//@ts-ignore
 const /** @type {HTMLButtonElement} */ stopButton = document.getElementById('stop')
+//@ts-ignore
+const /** @type {HTMLInputElement} */ colorPicker = document.getElementById('color')
+//@ts-ignore
+const /** @type {HTMLElement} */ mainElement = document.querySelector('main')
 
 let /** @type {AudioContext} */ context
 let /** @type {GainNode} */ gain
 let /** @type {number?} */ callback = null
+let bpb = 4
 let bpm = 120
 let highOrLow = 0
 
@@ -86,12 +118,21 @@ volumeInput.addEventListener('input', () => {
   volumeOutput.innerText = volumeInput.value + '%'
 })
 
+bpbInput.addEventListener('input', () => {
+  bpb = Number(bpbInput.value)
+  bpbOutput.innerText = bpbInput.value + ' beats'
+})
+
 stopButton.addEventListener('click', () => {
   if (callback !== null) {
     clearTimeout(callback)
     callback = null
     highOrLow = 0
   }
+})
+
+colorPicker.addEventListener('input', () => {
+  document.body.style.setProperty('--base-color', colorPicker.value)
 })
 
 function beep() {
@@ -105,8 +146,11 @@ function beep() {
   envelope.gain.setTargetAtTime(0, context.currentTime + 0.1, 0.08)
   osc.start()
   osc.stop(context.currentTime + 1)
-  highOrLow = (highOrLow + 1) % 4
-  callback = setTimeout(beep, 60000 / bpm)
+  highOrLow = (highOrLow + 1) % bpb
+  const time = 60000 / bpm
+  callback = setTimeout(beep, time)
+  document.body.animate([{ boxShadow: '0 0 5vw 5vw var(--base-color)', easing: 'ease-out' }, {}], time)
+  mainElement.animate([{ boxShadow: 'inset 0 0 5vw 5vw var(--base-color)', easing: 'ease-out' }, {}], time)
 }
 
 startButton.addEventListener('click', () => {
