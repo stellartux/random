@@ -1,4 +1,4 @@
-export default register('roman', (p) => p.pick({
+export const roman = register('roman', (p) => p.pick({
   I: '0,4,7',
   I7: '0,4,7,10',
   IM7: '0,4,7,11',
