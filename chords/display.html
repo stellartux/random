@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Chord List</title>
+  <style>
+    :root {
+      color-scheme: dark light;
+      font-family: sans-serif;
+    }
+
+    body,
+    output {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1ch;
+    }
+
+    input,
+    button {
+      font-size: x-large;
+      margin-left: 4ch;
+    }
+
+    .chord-output-row {
+      display: grid;
+      grid-template-columns: 16ch 1fr;
+      gap: 2ch;
+      align-items: center;
+    }
+
+    .chord-name {
+      font-size: xx-large;
+      display: block;
+      text-align: end;
+    }
+
+    article {
+      width: 90%;
+      max-width: 99vw;
+      margin: auto;
+      padding: 1ch;
+      font-size: large;
+    }
+
+    article p {
+      margin: 2ch 4ch;
+    }
+
+    table {
+      width: 100%;
+      margin: auto;
+      gap: 1ch;
+    }
+
+    article h2 {
+      margin-left: 1ch;
+    }
+
+    code {
+      background: rgb(48, 48, 48);
+      padding: 0.3ch;
+      border-radius: 20%;
+    }
+    table code {
+      margin-right: 1ch;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Chord List</h1>
+  <article id="help" popover>
+    <section>
+      <h2>Chord Name Syntax</h2>
+      <p>
+        Chord names are <code>C D E F G A B</code>, accidentals can be specified
+        with either ASCII <code>#</code> or <code>b</code> or Unicode
+        <code>♯</code> or <code>♭</code> sharp and flat symbols.
+      </p>
+      <table id="chord-quality">
+        <thead>
+          <tr>
+            <th scope="col">Chord Quality</th>
+            <th scope="col">Symbol</th>
+            <th scope="col">Integer Notation</th>
+            <th scope="col">Examples</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Major</td>
+            <td><code></code></td>
+            <td><code>0,4,7</code></td>
+            <td><code>C</code><code>F#</code><code>Gb</code></td>
+          </tr>
+          <tr>
+            <td>Minor</td>
+            <td><code>m</code></td>
+            <td><code>0,3,7</code></td>
+            <td><code>Cm</code><code>F#m</code><code>Gbm</code></td>
+          </tr>
+          <tr>
+            <td>Diminished</td>
+            <td><code>o</code></td>
+            <td><code>0,3,6</code></td>
+            <td><code>Co</code><code>F#o</code><code>Gbo</code></td>
+          </tr>
+          <tr>
+            <td>Augmented</td>
+            <td><code>+</code></td>
+            <td><code>0,4,8</code></td>
+            <td><code>C</code><code>F#+</code><code>Gb+</code></td>
+          </tr>
+          <tr>
+            <td>Dominant</td>
+            <td><code>7</code></td>
+            <td><code>0,4,7,10</code></td>
+            <td><code>C7</code><code>F#7</code><code>Gb7</code></td>
+          </tr>
+          <tr>
+            <td>Minor Seven</td>
+            <td><code>m7</code></td>
+            <td><code>0,3,7,10</code></td>
+            <td><code>Cm7</code><code>F#m7</code><code>Gbm7</code></td>
+          </tr>
+          <tr>
+            <td>Major Seven</td>
+            <td><code>maj7</code></td>
+            <td><code>0,4,7,11</code></td>
+            <td><code>Cmaj7</code><code>F#maj7</code><code>Gbmaj7</code></td>
+          </tr>
+          <tr>
+            <td>Minor Major Seven</td>
+            <td><code>mmaj7</code></td>
+            <td><code>0,3,7,11</code></td>
+            <td><code>Cmmaj7</code><code>F#mmaj7</code><code>Gbmmaj7</code></td>
+          </tr>
+          <tr>
+            <td>Powerchord</td>
+            <td><code>5</code></td>
+            <td><code>0,7</code></td>
+            <td><code>C5</code><code>F#5</code><code>Gb5</code></td>
+          </tr>
+          <tr>
+            <td>Suspended Second</td>
+            <td><code>sus2</code></td>
+            <td><code>0,2,7</code></td>
+            <td><code>Csus2</code><code>F#sus2</code><code>Gbsus2</code></td>
+          </tr>
+          <tr>
+            <td>Suspended Fourth</td>
+            <td><code>sus4</code></td>
+            <td><code>0,5,7</code></td>
+            <td><code>Csus4</code><code>F#sus4</code><code>Gbsus4</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </article>
+
+  <div>
+    <input id="chord-input" type="text" size="32" value="C G Am F" />
+    <button popovertarget="help" popovertargetaction="show">?</button>
+  </div>
+
+  <output id="chord-output"></output>
+  <template id="chord-display">
+    <div class="chord-output-row">
+      <div class="chord-name"></div>
+      <svg xmlns="http://www.w3.org/2000/svg" width="60ch" height="10ch">
+        <defs>
+          <rect id="ivory" x="0" y="0" width="17ch" height="14ch" />
+          <rect id="ebony" x="3ch" y="0" width="2ch" height="6.5ch" />
+        </defs>
+        <g fill="ivory" stroke="gray">
+          <use href="#ivory" data-note="48" />
+          <use href="#ivory" x="4ch" data-note="50" />
+          <use href="#ivory" x="8ch" data-note="52" />
+          <use href="#ivory" x="12ch" data-note="53" />
+          <use href="#ivory" x="16ch" data-note="55" />
+          <use href="#ivory" x="20ch" data-note="57" />
+          <use href="#ivory" x="24ch" data-note="59" />
+          <use href="#ivory" x="28ch" data-note="60" />
+          <use href="#ivory" x="32ch" data-note="62" />
+          <use href="#ivory" x="36ch" data-note="64" />
+          <use href="#ivory" x="40ch" data-note="65" />
+          <use href="#ivory" x="44ch" data-note="67" />
+          <use href="#ivory" x="48ch" data-note="69" />
+          <use href="#ivory" x="52ch" data-note="71" />
+          <use href="#ivory" x="56ch" data-note="72" />
+        </g>
+        <g fill="black" stroke="gray">
+          <use href="#ebony" x="0ch" data-note="49" />
+          <use href="#ebony" x="4ch" data-note="51" />
+          <use href="#ebony" x="12ch" data-note="54" />
+          <use href="#ebony" x="16ch" data-note="56" />
+          <use href="#ebony" x="20ch" data-note="58" />
+          <use href="#ebony" x="28ch" data-note="61" />
+          <use href="#ebony" x="32ch" data-note="63" />
+          <use href="#ebony" x="40ch" data-note="66" />
+          <use href="#ebony" x="44ch" data-note="68" />
+          <use href="#ebony" x="48ch" data-note="70" />
+        </g>
+      </svg>
+    </div>
+  </template>
+  <script>
+    //@ts-check
+    /** @returns {any} */
+    const getId = (/** @type {string} */ id) => document.getElementById(id)
+
+    const /** @type {HTMLInputElement} */ input = getId('chord-input')
+    const /** @type {HTMLOutputElement} */ output = getId('chord-output')
+    const /** @type {HTMLTemplateElement} */ template = getId('chord-display')
+    const audioContext = new AudioContext({ latencyHint: 'playback' })
+    const gain = new GainNode(audioContext, { gain: 0.5 })
+    gain.connect(audioContext.destination)
+
+    const chords = {}
+
+    for (const [offset, root] of ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'].entries()) {
+      for (const [suffix, shape] of Object.entries({
+        // dyad
+        '5': [0, 7],
+
+        // triads
+        'sus2': [0, 2, 7],
+        'o': [0, 3, 6],
+        'dim': [0, 3, 6],
+        '-': [0, 3, 7],
+        'm': [0, 3, 7],
+        '': [0, 4, 7],
+        'maj': [0, 4, 7],
+        '+': [0, 4, 8],
+        'aug': [0, 4, 8],
+        'sus4': [0, 5, 7],
+        '7no3': [0, 7, 10],
+        'maj7no3': [0, 7, 11],
+
+        // tetrads
+        'o7': [0, 3, 6, 9],
+        'dim7': [0, 3, 6, 9],
+        'm7b5': [0, 3, 6, 10],
+        'm6': [0, 3, 7, 9],
+        'm7': [0, 3, 7, 10],
+        'mmaj7': [0, 3, 7, 11],
+        'madd9': [0, 3, 7, 14],
+        'madd11': [0, 3, 7, 17],
+        '7b5': [0, 4, 6, 10],
+        '6': [0, 4, 7, 9],
+        '7': [0, 4, 7, 10],
+        'dom7': [0, 4, 7, 10],
+        'add9': [0, 4, 7, 14],
+        'add11': [0, 4, 7, 17],
+        '+7': [0, 4, 8, 10],
+        'aug7': [0, 4, 8, 10],
+        'maj7': [0, 4, 7, 11],
+        '+maj7': [0, 4, 8, 11],
+        'augmaj7': [0, 4, 8, 11],
+
+        // extended chords
+        '9': [0, 4, 7, 10, 14],
+        'm9': [0, 3, 7, 10, 14],
+        'maj9': [0, 4, 7, 11, 14],
+        'mmaj9': [0, 3, 7, 11, 14],
+      })) {
+        chords[root + suffix] = shape.map((o) => o + offset + 48)
+      }
+    }
+
+    /** @returns {number[]|undefined} */
+    function chordToPitches(/** @type {string} */ chord) {
+      const list = chord.split(',').map(Number).filter(Boolean)
+      if (list[0] && list.every((n) => Number.isInteger(n) && n >= 48 && n <= 73)) {
+        return [...new Set(list)]
+      }
+      return chords[
+        chord.toLowerCase()
+          .replace('♯', '#')
+          .replace('♭', 'b')
+          .replace('db', 'c#')
+          .replace('eb', 'd#')
+          .replace('gb', 'f#')
+          .replace('ab', 'g#')
+          .replace('bb', 'a#')
+      ]
+    }
+
+    const /** @type {Record<string,number[]>} */ chordQualities = {}
+    for (const { children } of document.querySelectorAll('table#chord-quality>tbody>tr')) {
+      //@ts-ignore
+      const semitones = children[2].children[0].textContent.split(',').map(Number)
+      for (const suffix of children[1].children) {
+        //@ts-ignore
+        chordQualities[suffix.textContent] = semitones
+      }
+    }
+
+    function chordParser(/** @type {string} */ chord) {
+      const match = chord.match(/^(?<root>[a-gA-G])(?<accidentals>[#b♯♭♮]*)(?<quality>.*)$/u)
+      if (match?.groups) {
+        const result = match.groups
+        let { root, accidentals, quality } = result
+        result.root = root = root.toUpperCase()
+        let offset = 0
+        for (const acc of accidentals) {
+          if (acc === '#' || acc === '♯') {
+            offset++
+          } else if (acc === 'b' || acc === '♭') {
+            offset--
+          }
+        }
+        result.name = root + accidentals.replace(/#/g, '♯').replace(/b/g, '♭') + quality
+        result.midiNumber = { A: 57, B: 59, C: 48, D: 50, E: 52, F: 53, G: 55 }[root] + offset
+        return result
+      }
+    }
+
+    /** @returns {number} */
+    function midiNumberToFrequency(/** @type {number} */ midi) {
+      return 880 * 2 ** ((midi - 69) / 12)
+    }
+    //@ts-ignore
+    const url = new URL(window.location)
+    function updateChordList() {
+      output.innerHTML = ""
+      const palette = [
+        '#ff4040', '#11ee80', '#bf00bf', '#80ee11', '#4040ff', '#ee8011',
+        '#00bfbf', '#ee1180', '#40ff40', '#8011ee', '#bfbf00', '#1180ee'
+      ]
+      let playing = []
+      for (const chord of input.value.split(/\s+/).filter(Boolean)) {
+        const pitches = chordToPitches(chord)
+        if (pitches) {
+          const keyb = template.content.cloneNode(true)
+          for (const pitch of pitches) {
+            //@ts-ignore
+            keyb.querySelector(`[data-note="${pitch}"]`)
+              .setAttribute('fill', palette[pitch % 12])
+            //@ts-ignore
+            keyb.querySelector(`div.chord-name`).innerText =
+              chord[0].toUpperCase() + chord.slice(1).toLowerCase()
+                .replace(/#/g, '♯').replace(/b/g, '♭')
+          }
+          output.appendChild(keyb)
+          output.lastElementChild?.addEventListener('click', () => {
+            playing.forEach((osc) => osc.stop())
+            playing.length = 0
+            gain.gain.value = 1 / (pitches.length + 1)
+            for (const pitch of pitches) {
+              const osc = new OscillatorNode(audioContext, {
+                type: 'sine',
+                frequency: midiNumberToFrequency(pitch),
+              })
+              osc.connect(gain)
+              osc.start(0)
+              osc.stop(audioContext.currentTime + 2)
+              playing.push(osc)
+            }
+          })
+        }
+      }
+      url.searchParams.set('c', input.value.trim().replace(/\s+/g, '_'))
+      window.history.replaceState({}, '', url)
+    }
+
+    const params = new URLSearchParams(document.location.search)
+    if (params.has('c')) {
+      //@ts-ignore
+      input.value = params.get('c').replace(/_+/g, ' ')
+    }
+    input.addEventListener('input', updateChordList)
+    updateChordList()
+    document.addEventListener('click', () => audioContext.resume(), { once: true, capture: true })
+  </script>
+</body>
+
+</html>
