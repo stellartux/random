@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Transposer</title>
+  <title>Transpose</title>
   <style>
     :root {
       color-scheme: dark light;
@@ -17,6 +17,13 @@
       margin: auto;
       width: fit-content;
       font-size: large;
+      gap: 1ch;
+    }
+
+    nav {
+      align-self: center;
+      margin-top: 1ch;
+      font-size: smaller;
     }
 
     h1 {
@@ -65,6 +72,7 @@
 </head>
 
 <body>
+  <nav><a href="./display.html">Display</a> | Transpose</nav>
   <h1>Transpose</h1>
   <div>
     <label for="input-key">from the key of </label>
@@ -153,29 +161,39 @@
 
     function parseChord(/** @type {string} */ chordName) {
       return (
-        chordName.match(/^(?<chord>(?<accidentals>[#b♭♯♮]*)(?<root>iv|i{1,3}|vi{0,2})(?<quality>.*)(?<roman>))/i)
-        || chordName.match(/^(?<chord>(?<root>[a-g])(?<accidentals>[#b♭♯♮]*)(?<quality>.*))/i)
+        chordName.match(/^(?<chord>(?<accidentals>[#b♭♯♮]*)(?<root>iv|i{1,3}|vi{0,2})(?<roman>)(?<quality>[^\/\s]*?)(?:\/(?<slashaccidentals>[#b♭♯♮]*)(?<slashroot>iv|i{1,3}|vi{0,2}))?)$/i)
+        || chordName.match(/^(?<chord>(?<root>[a-g])(?<accidentals>[#b♭♯♮]*)(?<quality>.*?))(?:\/(?<slashroot>[a-gA-G])(?<slashaccidentals>[#b♭♯♮]*))?$/i)
       )?.groups
     }
 
     function transpose(chord, /** @type {number} */ semitones, flat = false) {
       if (typeof chord === 'string') {
         chord = parseChord(chord)
-        if (!chord) throw new Error('Could not parse chord')
       }
+      if (!chord) throw new Error('Could not parse chord')
       //@ts-ignore
       let { root, accidentals, quality } = chord
       if (/^[iv]/.test(root) && !/^([-+o]|dim)/.test(quality)) {
         quality = 'm' + quality
       }
       const accidentalOffset = accidentals.split('').reduce((a, c) => a + ({ '#': 1, '♯': 1, '♭': -1, 'b': -1 }[c] || 0), 0)
-      return (flat ? flats : sharps)[((
+      const baseChord = (flat ? flats : sharps)[((
         semitones +
         {
           C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
           I: 0, II: 2, III: 4, IV: 5, V: 7, VI: 9, VII: 11,
         }[root.toUpperCase()] + accidentalOffset
       ) % 12 + 12) % 12] + quality
+      if (chord['slashroot']) {
+        if ('roman' in chord) {
+          // TODO proper Roman slash chords
+          return baseChord + '/' + transpose(chord.slashaccidentals + chord.slashroot, semitones, flat)
+        } else {
+          return baseChord + '/' + transpose(chord.slashroot + chord.slashaccidentals, semitones, flat)
+        }
+      } else {
+        return baseChord
+      }
     }
 
     function updateChordList() {
