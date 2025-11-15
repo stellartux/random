@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Chord List</title>
+  <title>Display</title>
   <style>
     :root {
       color-scheme: dark light;
@@ -27,7 +27,7 @@
 
     .chord-output-row {
       display: grid;
-      grid-template-columns: 16ch 1fr;
+      grid-template-columns: minmax(16ch, min-content) 1fr;
       gap: 2ch;
       align-items: center;
     }
@@ -39,11 +39,13 @@
     }
 
     article {
-      width: 90%;
-      max-width: 99vw;
+      width: 120ch;
+      max-width: 90vw;
       margin: auto;
       padding: 1ch;
       font-size: large;
+      max-height: 90vh;
+      overflow: auto;
     }
 
     article p {
@@ -61,18 +63,28 @@
     }
 
     code {
-      background: rgb(48, 48, 48);
+      background: rgb(48 48 48);
       padding: 0.3ch;
       border-radius: 20%;
     }
+
     table code {
       margin-right: 1ch;
+    }
+
+    td:nth-child(4) svg {
+      font-size: xx-small;
+    }
+
+    td:nth-child(4) .chord-name {
+      font-size: medium;
     }
   </style>
 </head>
 
 <body>
-  <h1>Chord List</h1>
+  <nav>Display | <a href="./transpose.html">Transpose</a></nav>
+  <h1>Display</h1>
   <article id="help" popover>
     <section>
       <h2>Chord Name Syntax</h2>
@@ -81,13 +93,18 @@
         with either ASCII <code>#</code> or <code>b</code> or Unicode
         <code>♯</code> or <code>♭</code> sharp and flat symbols.
       </p>
+      <p>
+        Any cluster of notes can be represented using a list of MIDI notes joined
+        with commas. For example, <code>Cm</code>, <code>48,51,55</code> and
+        <code>C3,Eb3,G3</code> all display the same chord.
+      </p>
       <table id="chord-quality">
         <thead>
           <tr>
             <th scope="col">Chord Quality</th>
             <th scope="col">Symbol</th>
             <th scope="col">Integer Notation</th>
-            <th scope="col">Examples</th>
+            <th scope="col">Example</th>
           </tr>
         </thead>
         <tbody>
@@ -95,67 +112,161 @@
             <td>Major</td>
             <td><code></code></td>
             <td><code>0,4,7</code></td>
-            <td><code>C</code><code>F#</code><code>Gb</code></td>
           </tr>
           <tr>
             <td>Minor</td>
-            <td><code>m</code></td>
+            <td><code>m</code><code>-</code><code>min</code></td>
             <td><code>0,3,7</code></td>
-            <td><code>Cm</code><code>F#m</code><code>Gbm</code></td>
           </tr>
           <tr>
             <td>Diminished</td>
-            <td><code>o</code></td>
+            <td><code>o</code><code>dim</code></td>
             <td><code>0,3,6</code></td>
-            <td><code>Co</code><code>F#o</code><code>Gbo</code></td>
           </tr>
           <tr>
             <td>Augmented</td>
-            <td><code>+</code></td>
+            <td><code>+</code><code>aug</code></td>
             <td><code>0,4,8</code></td>
-            <td><code>C</code><code>F#+</code><code>Gb+</code></td>
           </tr>
           <tr>
             <td>Dominant</td>
-            <td><code>7</code></td>
+            <td><code>7</code><code>dom7</code><code>Δ7</code></td>
             <td><code>0,4,7,10</code></td>
-            <td><code>C7</code><code>F#7</code><code>Gb7</code></td>
           </tr>
           <tr>
             <td>Minor Seven</td>
             <td><code>m7</code></td>
             <td><code>0,3,7,10</code></td>
-            <td><code>Cm7</code><code>F#m7</code><code>Gbm7</code></td>
           </tr>
           <tr>
             <td>Major Seven</td>
-            <td><code>maj7</code></td>
+            <td><code>maj7</code><code>M7</code></td>
             <td><code>0,4,7,11</code></td>
-            <td><code>Cmaj7</code><code>F#maj7</code><code>Gbmaj7</code></td>
           </tr>
           <tr>
             <td>Minor Major Seven</td>
-            <td><code>mmaj7</code></td>
+            <td><code>mmaj7</code><code>mM7</code></td>
             <td><code>0,3,7,11</code></td>
-            <td><code>Cmmaj7</code><code>F#mmaj7</code><code>Gbmmaj7</code></td>
           </tr>
           <tr>
             <td>Powerchord</td>
             <td><code>5</code></td>
             <td><code>0,7</code></td>
-            <td><code>C5</code><code>F#5</code><code>Gb5</code></td>
           </tr>
           <tr>
             <td>Suspended Second</td>
             <td><code>sus2</code></td>
             <td><code>0,2,7</code></td>
-            <td><code>Csus2</code><code>F#sus2</code><code>Gbsus2</code></td>
           </tr>
           <tr>
             <td>Suspended Fourth</td>
             <td><code>sus4</code></td>
             <td><code>0,5,7</code></td>
-            <td><code>Csus4</code><code>F#sus4</code><code>Gbsus4</code></td>
+          </tr>
+          <tr>
+            <td>Diminished Seven</td>
+            <td><code>o7</code><code>dim7</code></td>
+            <td><code>0,3,6,9</code></td>
+          </tr>
+          <tr>
+            <td>Half-Diminished</td>
+            <td><code>m7b5</code></td>
+            <td><code>0,3,6,10</code></td>
+          </tr>
+          <tr>
+            <td>Diminished Major Seven</td>
+            <td><code>omaj7</code><code>oM7</code><code>dimM7</code></td>
+            <td><code>0,3,6,11</code></td>
+          </tr>
+          <tr>
+            <td>Minor Flat Six</td>
+            <td><code>mb6</code></td>
+            <td><code>0,3,7,8</code></td>
+          </tr>
+          <tr>
+            <td>Minor Six</td>
+            <td><code>m6</code></td>
+            <td><code>0,3,7,9</code></td>
+          </tr>
+          <tr>
+            <td>Minor Add Nine</td>
+            <td><code>madd9</code></td>
+            <td><code>0,3,7,14</code></td>
+          </tr>
+          <tr>
+            <td>Minor Add Eleven</td>
+            <td><code>madd11</code></td>
+            <td><code>0,3,7,17</code></td>
+          </tr>
+          <tr>
+            <td>Seven Flat Five</td>
+            <td><code>7b5</code></td>
+            <td><code>0,4,6,10</code></td>
+          </tr>
+          <tr>
+            <td>Six</td>
+            <td><code>6</code></td>
+            <td><code>0,4,7,9</code></td>
+          </tr>
+          <tr>
+            <td>Add Nine</td>
+            <td><code>add9</code></td>
+            <td><code>0,4,7,14</code></td>
+          </tr>
+          <tr>
+            <td>Add Eleven</td>
+            <td><code>add11</code></td>
+            <td><code>0,4,7,17</code></td>
+          </tr>
+          <tr>
+            <td>Augmented Seven</td>
+            <td><code>+7</code><code>aug7</code></td>
+            <td><code>0,4,8,10</code></td>
+          </tr>
+          <tr>
+            <td>Augmented Major Seven</td>
+            <td><code>+maj7</code><code>augmaj7</code></td>
+            <td><code>0,4,8,11</code></td>
+          </tr>
+          <tr>
+            <td>Minor Nine</td>
+            <td><code>m9</code></td>
+            <td><code>0,3,7,10,14</code></td>
+          </tr>
+          <tr>
+            <td>Minor Major Nine</td>
+            <td><code>mmaj9</code><code>mM9</code></td>
+            <td><code>0,3,7,11,14</code></td>
+          </tr>
+          <tr>
+            <td>Six Nine</td>
+            <td><code>6/9</code></td>
+            <td><code>0,4,7,9,14</code></td>
+          </tr>
+          <tr>
+            <td>Seven Six</td>
+            <td><code>7/6</code></td>
+            <td><code>0,4,7,9,10</code></td>
+          </tr>
+          <tr>
+            <td>Nine</td>
+            <td><code>9</code></td>
+            <td><code>0,4,7,10,14</code></td>
+          </tr>
+          <tr>
+            <td>Flat Nine</td>
+            <td><code>7b9</code></td>
+            <td><code>0,4,7,10,13</code></td>
+          </tr>
+          <tr>
+            <td>Major Nine</td>
+            <td><code>maj9</code><code>M9</code></td>
+            <td><code>0,4,7,11,14</code></td>
+          </tr>
+          <tr>
+            <td>Jazz Sus</td>
+            <td><code>9sus4</code></td>
+            <td><code>0,5,7,10,14</code></td>
           </tr>
         </tbody>
       </table>
@@ -163,19 +274,22 @@
   </article>
 
   <div>
-    <input id="chord-input" type="text" size="32" value="C G Am F" />
+    <input id="chord-input" type="text" size="32" value="" placeholder="Type some chords" />
     <button popovertarget="help" popovertargetaction="show">?</button>
   </div>
 
   <output id="chord-output"></output>
+  <svg xmlns="http://www.w3.org/2000/svg" width="60ch" height="10ch">
+    <defs>
+      <rect id="ivory" x="0" y="0" width="17ch" height="14ch" />
+      <rect id="ebony" x="3ch" y="0" width="2ch" height="6.5ch" />
+    </defs>
+  </svg>
+
   <template id="chord-display">
     <div class="chord-output-row">
       <div class="chord-name"></div>
       <svg xmlns="http://www.w3.org/2000/svg" width="60ch" height="10ch">
-        <defs>
-          <rect id="ivory" x="0" y="0" width="17ch" height="14ch" />
-          <rect id="ebony" x="3ch" y="0" width="2ch" height="6.5ch" />
-        </defs>
         <g fill="ivory" stroke="gray">
           <use href="#ivory" data-note="48" />
           <use href="#ivory" x="4ch" data-note="50" />
@@ -194,7 +308,7 @@
           <use href="#ivory" x="56ch" data-note="72" />
         </g>
         <g fill="black" stroke="gray">
-          <use href="#ebony" x="0ch" data-note="49" />
+          <use href="#ebony" data-note="49" />
           <use href="#ebony" x="4ch" data-note="51" />
           <use href="#ebony" x="12ch" data-note="54" />
           <use href="#ebony" x="16ch" data-note="56" />
@@ -208,86 +322,94 @@
       </svg>
     </div>
   </template>
-  <script>
-    //@ts-check
+  <script>///@ts-check
+    'strict mode'
     /** @returns {any} */
     const getId = (/** @type {string} */ id) => document.getElementById(id)
 
     const /** @type {HTMLInputElement} */ input = getId('chord-input')
     const /** @type {HTMLOutputElement} */ output = getId('chord-output')
     const /** @type {HTMLTemplateElement} */ template = getId('chord-display')
+
+    /** @returns {number} */
+    function midiNumberToFrequency(/** @type {number} */ midi) {
+      return 880 * 2 ** ((midi - 69) / 12)
+    }
+
     const audioContext = new AudioContext({ latencyHint: 'playback' })
     const gain = new GainNode(audioContext, { gain: 0.5 })
     gain.connect(audioContext.destination)
+    let playing = []
+    function playPitches(/** @type {number[]} a list of MIDI numbers */ pitches) {
+      playing.forEach((osc) => osc.stop())
+      playing.length = 0
+      gain.gain.value = 1 / (pitches.length + 1)
+      for (const pitch of pitches) {
+        const osc = new OscillatorNode(audioContext, {
+          type: 'sine',
+          frequency: midiNumberToFrequency(pitch),
+        })
+        osc.connect(gain)
+        osc.start(0)
+        osc.stop(audioContext.currentTime + 2)
+        playing.push(osc)
+      }
+    }
 
-    const chords = {}
+    const qualities = {}
 
-    for (const [offset, root] of ['c', 'c#', 'd', 'd#', 'e', 'f', 'f#', 'g', 'g#', 'a', 'a#', 'b'].entries()) {
-      for (const [suffix, shape] of Object.entries({
-        // dyad
-        '5': [0, 7],
+    for (const el of document.querySelectorAll('table#chord-quality>tbody>tr')) {
+      const [_, symbols, notation] = el.children
+      const integers = notation.children[0].textContent?.split(',').map(Number)
+      for (const code of symbols.querySelectorAll('code')) {
+        qualities[code.textContent] = integers
+      }
+      const td = document.createElement('td')
+      //@ts-ignore
+      appendKeyboard('C' + symbols.children[0].innerText, td)
+      el.appendChild(td)
+    }
 
-        // triads
-        'sus2': [0, 2, 7],
-        'o': [0, 3, 6],
-        'dim': [0, 3, 6],
-        '-': [0, 3, 7],
-        'm': [0, 3, 7],
-        '': [0, 4, 7],
-        'maj': [0, 4, 7],
-        '+': [0, 4, 8],
-        'aug': [0, 4, 8],
-        'sus4': [0, 5, 7],
-        '7no3': [0, 7, 10],
-        'maj7no3': [0, 7, 11],
+    function canonical(/** @type {string} */ chordName) {
+      if (chordName.includes(',')) {
+        return chordName.split(',').filter(Boolean).map(canonical).join(',')
+      } else if (chordName.includes('/')) {
+        return chordName.split('/').filter(Boolean).map(canonical).join('/')
+      } else if (chordName) {
+        return chordName[0].toUpperCase() + chordName.slice(1)
+          .replace(/#/g, '♯').replace(/b/g, '♭').replace('♮', '')
+      }
+    }
 
-        // tetrads
-        'o7': [0, 3, 6, 9],
-        'dim7': [0, 3, 6, 9],
-        'm7b5': [0, 3, 6, 10],
-        'm6': [0, 3, 7, 9],
-        'm7': [0, 3, 7, 10],
-        'mmaj7': [0, 3, 7, 11],
-        'madd9': [0, 3, 7, 14],
-        'madd11': [0, 3, 7, 17],
-        '7b5': [0, 4, 6, 10],
-        '6': [0, 4, 7, 9],
-        '7': [0, 4, 7, 10],
-        'dom7': [0, 4, 7, 10],
-        'add9': [0, 4, 7, 14],
-        'add11': [0, 4, 7, 17],
-        '+7': [0, 4, 8, 10],
-        'aug7': [0, 4, 8, 10],
-        'maj7': [0, 4, 7, 11],
-        '+maj7': [0, 4, 8, 11],
-        'augmaj7': [0, 4, 8, 11],
+    function rootToOffset(/** @type {string} */ root) {
+      return { A: 57, B: 59, C: 48, D: 50, E: 52, F: 53, G: 55 }[root.toUpperCase()]
+    }
 
-        // extended chords
-        '9': [0, 4, 7, 10, 14],
-        'm9': [0, 3, 7, 10, 14],
-        'maj9': [0, 4, 7, 11, 14],
-        'mmaj9': [0, 3, 7, 11, 14],
-      })) {
-        chords[root + suffix] = shape.map((o) => o + offset + 48)
+    /** Convert a string of accidentals to its offset in semitones */
+    function accidentalsToOffset(/** @type {string} */ accidentals) {
+      return accidentals.split('').reduce((a, c) => a + ({ 'b': -1, '♭': -1, '♯': 1, '#': 1, '𝄫': -2, '𝄪': 2 }[c] || 0), 0)
+    }
+
+    function noteToPitch(/** @type {string} */ note) {
+      const groups = note.match(/^(?<root>[a-gA-G])(?<accidentals>[b#𝄫𝄪♯♭♮]*)(?<octave>[0-9])?$/)?.groups
+      if (groups) {
+        const octave = Number(groups.octave || 3) + 1
+        return (rootToOffset(groups.root.toUpperCase()) % 12) + accidentalsToOffset(groups.accidentals) + 12 * octave
+      } else if (/^\d+$/.test(note)) {
+        return Number(note)
       }
     }
 
     /** @returns {number[]|undefined} */
-    function chordToPitches(/** @type {string} */ chord) {
-      const list = chord.split(',').map(Number).filter(Boolean)
-      if (list[0] && list.every((n) => Number.isInteger(n) && n >= 48 && n <= 73)) {
-        return [...new Set(list)]
+    function chordToPitches(/** @type {string} */ chordName) {
+      if (/,/.test(chordName)) {
+        return chordName.split(',').map(noteToPitch).filter((x) => x >= 21 && x <= 108)
       }
-      return chords[
-        chord.toLowerCase()
-          .replace('♯', '#')
-          .replace('♭', 'b')
-          .replace('db', 'c#')
-          .replace('eb', 'd#')
-          .replace('gb', 'f#')
-          .replace('ab', 'g#')
-          .replace('bb', 'a#')
-      ]
+      const chord = parseChord(chordName)
+      if (chord && qualities[chord.quality]) {
+        const root = noteToPitch(chord.root) + accidentalsToOffset(chord.accidentals)
+        return qualities[chord.quality].map((x) => x + root)
+      }
     }
 
     const /** @type {Record<string,number[]>} */ chordQualities = {}
@@ -300,69 +422,39 @@
       }
     }
 
-    function chordParser(/** @type {string} */ chord) {
-      const match = chord.match(/^(?<root>[a-gA-G])(?<accidentals>[#b♯♭♮]*)(?<quality>.*)$/u)
+    function parseChord(/** @type {string} */ chord) {
+      const match = chord.match(/^(?<root>[a-gA-G])(?<accidentals>[#b♯♭♮]*)(?<quality>.*?)(?:\/(?<slashroot>[a-gA-G])(?<slashaccidentals>[#b♯♭♮]*))?$/u)
       if (match?.groups) {
         const result = match.groups
-        let { root, accidentals, quality } = result
-        result.root = root = root.toUpperCase()
-        let offset = 0
-        for (const acc of accidentals) {
-          if (acc === '#' || acc === '♯') {
-            offset++
-          } else if (acc === 'b' || acc === '♭') {
-            offset--
-          }
-        }
-        result.name = root + accidentals.replace(/#/g, '♯').replace(/b/g, '♭') + quality
-        result.midiNumber = { A: 57, B: 59, C: 48, D: 50, E: 52, F: 53, G: 55 }[root] + offset
         return result
       }
     }
 
-    /** @returns {number} */
-    function midiNumberToFrequency(/** @type {number} */ midi) {
-      return 880 * 2 ** ((midi - 69) / 12)
-    }
-    //@ts-ignore
-    const url = new URL(window.location)
-    function updateChordList() {
-      output.innerHTML = ""
+    function appendKeyboard(/** @type {string} */ chord, /** @type {HTMLElement} */ el) {
       const palette = [
         '#ff4040', '#11ee80', '#bf00bf', '#80ee11', '#4040ff', '#ee8011',
         '#00bfbf', '#ee1180', '#40ff40', '#8011ee', '#bfbf00', '#1180ee'
       ]
-      let playing = []
-      for (const chord of input.value.split(/\s+/).filter(Boolean)) {
-        const pitches = chordToPitches(chord)
-        if (pitches) {
-          const keyb = template.content.cloneNode(true)
-          for (const pitch of pitches) {
-            //@ts-ignore
-            keyb.querySelector(`[data-note="${pitch}"]`)
-              .setAttribute('fill', palette[pitch % 12])
-            //@ts-ignore
-            keyb.querySelector(`div.chord-name`).innerText =
-              chord[0].toUpperCase() + chord.slice(1).toLowerCase()
-                .replace(/#/g, '♯').replace(/b/g, '♭')
-          }
-          output.appendChild(keyb)
-          output.lastElementChild?.addEventListener('click', () => {
-            playing.forEach((osc) => osc.stop())
-            playing.length = 0
-            gain.gain.value = 1 / (pitches.length + 1)
-            for (const pitch of pitches) {
-              const osc = new OscillatorNode(audioContext, {
-                type: 'sine',
-                frequency: midiNumberToFrequency(pitch),
-              })
-              osc.connect(gain)
-              osc.start(0)
-              osc.stop(audioContext.currentTime + 2)
-              playing.push(osc)
-            }
-          })
+      const pitches = chordToPitches(chord)
+      if (pitches) {
+        const keyb = template.content.cloneNode(true)
+        for (const pitch of pitches) {
+          //@ts-ignore
+          keyb.querySelector(`[data-note="${pitch}"]`)?.setAttribute('fill', palette[pitch % 12])
+          //@ts-ignore
+          keyb.querySelector(`div.chord-name`).innerText = canonical(chord)
         }
+        el.appendChild(keyb)
+        el.lastElementChild?.addEventListener('click', () => playPitches(pitches))
+      }
+    }
+
+    //@ts-ignore
+    const url = new URL(window.location)
+    function updateChordList() {
+      output.innerHTML = ""
+      for (const chord of input.value.split(/\s+/).filter(Boolean)) {
+        appendKeyboard(chord, output)
       }
       url.searchParams.set('c', input.value.trim().replace(/\s+/g, '_'))
       window.history.replaceState({}, '', url)
