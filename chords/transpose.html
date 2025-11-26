@@ -166,6 +166,23 @@
       )?.groups
     }
 
+    function mod(/** @type {number} */ x, /** @type {number} */ y) {
+      const z = x % y
+      return z < 0 ? z + y : z
+    }
+
+    /** @returns {number} */
+    function rootToOffset(/** @type {string} */ root) {
+      return {
+        C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
+        I: 0, II: 2, III: 4, IV: 5, V: 7, VI: 9, VII: 11,
+      }[root.toUpperCase()]
+    }
+
+    /** Convert a string of accidentals to its offset in semitones */
+    function accidentalsToOffset(/** @type {string} */ accidentals) {
+      return accidentals.split('').reduce((a, c) => a + ({ 'b': -1, '♭': -1, '#': 1, '♯': 1, '𝄪': 2, '𝄫': -2 }[c] || 0), 0)
+    }
     function transpose(chord, /** @type {number} */ semitones, flat = false) {
       if (typeof chord === 'string') {
         chord = parseChord(chord)
@@ -176,24 +193,15 @@
       if (/^[iv]/.test(root) && !/^([-+o]|dim)/.test(quality)) {
         quality = 'm' + quality
       }
-      const accidentalOffset = accidentals.split('').reduce((a, c) => a + ({ '#': 1, '♯': 1, '♭': -1, 'b': -1 }[c] || 0), 0)
-      const baseChord = (flat ? flats : sharps)[((
-        semitones +
-        {
-          C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11,
-          I: 0, II: 2, III: 4, IV: 5, V: 7, VI: 9, VII: 11,
-        }[root.toUpperCase()] + accidentalOffset
-      ) % 12 + 12) % 12] + quality
-      if (chord['slashroot']) {
-        if ('roman' in chord) {
-          // TODO proper Roman slash chords
-          return baseChord + '/' + transpose(chord.slashaccidentals + chord.slashroot, semitones, flat)
-        } else {
-          return baseChord + '/' + transpose(chord.slashroot + chord.slashaccidentals, semitones, flat)
-        }
-      } else {
-        return baseChord
+      const offset = mod(semitones + rootToOffset(root) + accidentalsToOffset(accidentals), 12)
+      if (chord['slashroot'] && 'roman' in chord) {
+        return transpose(chord.slashaccidentals + chord.slashroot, offset, flat)
       }
+      let baseChord = (flat ? flats : sharps)[offset] + quality
+      if (chord['slashroot']) {
+        baseChord += '/' + transpose(chord.slashroot + chord.slashaccidentals, semitones, flat)
+      }
+      return baseChord
     }
 
     function updateChordList() {
