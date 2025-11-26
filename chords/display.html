@@ -127,6 +127,21 @@
             <td><code>0,3,7</code></td>
           </tr>
           <tr>
+            <td>Powerchord</td>
+            <td><code>5</code></td>
+            <td><code>0,7</code></td>
+          </tr>
+          <tr>
+            <td>Suspended Second</td>
+            <td><code>sus2</code><code>2</code></td>
+            <td><code>0,2,7</code></td>
+          </tr>
+          <tr>
+            <td>Suspended Fourth</td>
+            <td><code>sus4</code><code>4</code></td>
+            <td><code>0,5,7</code></td>
+          </tr>
+          <tr>
             <td>Diminished</td>
             <td><code>o</code><code>dim</code></td>
             <td><code>0,3,6</code></td>
@@ -155,21 +170,6 @@
             <td>Minor Major Seven</td>
             <td><code>mmaj7</code><code>mM7</code></td>
             <td><code>0,3,7,11</code></td>
-          </tr>
-          <tr>
-            <td>Powerchord</td>
-            <td><code>5</code></td>
-            <td><code>0,7</code></td>
-          </tr>
-          <tr>
-            <td>Suspended Second</td>
-            <td><code>sus2</code><code>2</code></td>
-            <td><code>0,2,7</code></td>
-          </tr>
-          <tr>
-            <td>Suspended Fourth</td>
-            <td><code>sus4</code><code>4</code></td>
-            <td><code>0,5,7</code></td>
           </tr>
           <tr>
             <td>Diminished Seven</td>
@@ -262,7 +262,7 @@
             <td><code>0,4,7,10,14</code></td>
           </tr>
           <tr>
-            <td>Flat Nine</td>
+            <td>Seven Flat Nine</td>
             <td><code>7b9</code></td>
             <td><code>0,4,7,10,13</code></td>
           </tr>
@@ -369,13 +369,21 @@
 
   <div>
     <input id="chord-input" type="text" size="32" value="" placeholder="Type some chords" />
+    <label for="key-count">Keys:
+      <select id="key-count">
+        <option value="">auto</option>
+        <option>13</option>
+        <option>25</option>
+        <option>37</option>
+      </select>
+    </label>
     <button popovertarget="help" popovertargetaction="show">?</button>
   </div>
 
   <output id="chord-output"></output>
   <svg xmlns="http://www.w3.org/2000/svg" width="60ch" height="10ch">
     <defs>
-      <rect id="ivory" x="0" y="0" width="17ch" height="14ch" />
+      <rect id="ivory" x="0" y="0" width="4ch" height="10ch" />
       <rect id="ebony" x="3ch" y="0" width="2ch" height="6.5ch" />
     </defs>
   </svg>
@@ -442,15 +450,66 @@
     </div>
   </template>
 
+  <template id="chord-display-37">
+    <div class="chord-output-row">
+      <div class="chord-name"></div>
+      <svg xmlns="http://www.w3.org/2000/svg" width="88ch" height="10ch">
+        <g fill="ivory" stroke="gray">
+          <use href="#ivory" data-note="48" />
+          <use href="#ivory" x="4ch" data-note="50" />
+          <use href="#ivory" x="8ch" data-note="52" />
+          <use href="#ivory" x="12ch" data-note="53" />
+          <use href="#ivory" x="16ch" data-note="55" />
+          <use href="#ivory" x="20ch" data-note="57" />
+          <use href="#ivory" x="24ch" data-note="59" />
+          <use href="#ivory" x="28ch" data-note="60" />
+          <use href="#ivory" x="32ch" data-note="62" />
+          <use href="#ivory" x="36ch" data-note="64" />
+          <use href="#ivory" x="40ch" data-note="65" />
+          <use href="#ivory" x="44ch" data-note="67" />
+          <use href="#ivory" x="48ch" data-note="69" />
+          <use href="#ivory" x="52ch" data-note="71" />
+          <use href="#ivory" x="56ch" data-note="72" />
+          <use href="#ivory" x="60ch" data-note="74" />
+          <use href="#ivory" x="64ch" data-note="76" />
+          <use href="#ivory" x="68ch" data-note="77" />
+          <use href="#ivory" x="72ch" data-note="79" />
+          <use href="#ivory" x="76ch" data-note="81" />
+          <use href="#ivory" x="80ch" data-note="83" />
+          <use href="#ivory" x="84ch" data-note="84" />
+        </g>
+        <g fill="black" stroke="gray">
+          <use href="#ebony" data-note="49" />
+          <use href="#ebony" x="4ch" data-note="51" />
+          <use href="#ebony" x="12ch" data-note="54" />
+          <use href="#ebony" x="16ch" data-note="56" />
+          <use href="#ebony" x="20ch" data-note="58" />
+          <use href="#ebony" x="28ch" data-note="61" />
+          <use href="#ebony" x="32ch" data-note="63" />
+          <use href="#ebony" x="40ch" data-note="66" />
+          <use href="#ebony" x="44ch" data-note="68" />
+          <use href="#ebony" x="48ch" data-note="70" />
+          <use href="#ebony" x="56ch" data-note="73" />
+          <use href="#ebony" x="60ch" data-note="75" />
+          <use href="#ebony" x="68ch" data-note="78" />
+          <use href="#ebony" x="72ch" data-note="80" />
+          <use href="#ebony" x="76ch" data-note="82" />
+        </g>
+      </svg>
+    </div>
+  </template>
+
   <script>///@ts-check
     'strict mode'
     /** @returns {any} */
     const getId = (/** @type {string} */ id) => document.getElementById(id)
 
     const /** @type {HTMLInputElement} */ input = getId('chord-input')
+    const /** @type {HTMLSelectElement} */ keyCount = getId('key-count')
     const /** @type {HTMLOutputElement} */ output = getId('chord-output')
     const /** @type {HTMLTemplateElement} */ template13 = getId('chord-display-13')
     const /** @type {HTMLTemplateElement} */ template25 = getId('chord-display-25')
+    const /** @type {HTMLTemplateElement} */ template37 = getId('chord-display-37')
 
     /** @returns {number} */
     function midiNumberToFrequency(/** @type {number} */ midi) {
@@ -573,13 +632,24 @@
       }
     }
 
-    function appendKeyboard(/** @type {string} */ chord, /** @type {HTMLElement} */ el, template = template25) {
+    function appendKeyboard(/** @type {string} */ chord, /** @type {HTMLElement} */ el, template = { 13: template13, 25: template25, 37: template37 }[keyCount.children[keyCount.selectedIndex].value]) {
       const palette = [
         '#ff4040', '#11ee80', '#bf00bf', '#80ee11', '#4040ff', '#ee8011',
         '#00bfbf', '#ee1180', '#40ff40', '#8011ee', '#bfbf00', '#1180ee'
       ]
       const pitches = chordToPitches(chord)
       if (pitches) {
+        if (!template) {
+          const min = Math.min(...pitches)
+          const max = Math.max(...pitches)
+          if (max <= 60) {
+            template = template13
+          } else if (max <= 72) {
+            template = template25
+          } else {
+            template = template37
+          }
+        }
         const keyb = template.content.cloneNode(true)
         for (const pitch of pitches) {
           //@ts-ignore
@@ -599,7 +669,16 @@
       for (const chord of input.value.split(/\s+/).filter(Boolean)) {
         appendKeyboard(chord, output)
       }
-      url.searchParams.set('c', input.value.trim().replace(/\s+/g, '_'))
+      if (input.value.trim() != '') {
+        url.searchParams.set('c', input.value.trim().replace(/\s+/g, '_'))
+      } else {
+        url.searchParams.delete('c')
+      }
+      if (keyCount.value != '') {
+        url.searchParams.set('k', keyCount.value)
+      } else {
+        url.searchParams.delete('k')
+      }
       window.history.replaceState({}, '', url)
     }
 
@@ -608,7 +687,9 @@
       //@ts-ignore
       input.value = params.get('c').replace(/_+/g, ' ')
     }
+    keyCount.value = params.get('k') || ''
     input.addEventListener('input', updateChordList)
+    keyCount.addEventListener('input', updateChordList)
     updateChordList()
     document.addEventListener('click', () => audioContext.resume(), { once: true, capture: true })
   </script>
