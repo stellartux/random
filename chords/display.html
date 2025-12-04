@@ -276,6 +276,31 @@
             <td><code>9sus4</code></td>
             <td><code>0,5,7,10,14</code></td>
           </tr>
+          <tr>
+            <td>Dominant Eleven</td>
+            <td><code>11</code><code>dom11</code><code>Δ11</code></td>
+            <td><code>0,4,7,10,14,17</code></td>
+          </tr>
+          <tr>
+            <td>Minor Eleven</td>
+            <td><code>m11</code></td>
+            <td><code>0,3,7,10,14,17</code></td>
+          </tr>
+          <tr>
+            <td>Major Eleven</td>
+            <td><code>maj11</code></td>
+            <td><code>0,4,7,11,14,17</code></td>
+          </tr>
+          <tr>
+            <td>Dominant Sharp Eleven</td>
+            <td><code>9#11</code></td>
+            <td><code>0,4,7,10,14,18</code></td>
+          </tr>
+          <tr>
+            <td>Major Nine Sharp Eleven</td>
+            <td><code>maj9#11</code></td>
+            <td><code>0,4,7,11,14,18</code></td>
+          </tr>
         </tbody>
       </table>
       <p>
@@ -692,6 +717,11 @@
     keyCount.addEventListener('input', updateChordList)
     updateChordList()
     document.addEventListener('click', () => audioContext.resume(), { once: true, capture: true })
+    document.addEventListener('keypress', (ev) => {
+      if (ev.key === '?') {
+        getId('help').togglePopover()
+      }
+    })
   </script>
 </body>
 
