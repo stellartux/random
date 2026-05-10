@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>List Maker</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root {
+      color-scheme: dark light;
+    }
+
+    body {
+      width: 96vw;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    table {
+      width: 120ch;
+      max-width: 100%;
+      min-width: fit-content;
+    }
+
+    td {
+      padding: 0.3ch 1ch;
+    }
+
+    h1,
+    th {
+      text-align: center;
+    }
+
+    th {
+      min-width: 7ch;
+    }
+
+    tbody tr:nth-child(2n+1) {
+      background-color: aliceblue;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      tbody tr:nth-child(2n+1) {
+        background-color: #222;
+      }
+    }
+
+    th:hover {
+      text-decoration: underline;
+    }
+
+    [aria-sort="ascending"]::after {
+      content: "▲";
+    }
+
+    [aria-sort="descending"]::after {
+      content: "▼";
+    }
+
+    #search {
+      position: fixed;
+      justify-self: right;
+      top: 1ch;
+      right: 1ch;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="inputs">
+    <p>Paste a CSV or TSV in the text area, type a title in the title box then hit convert.</p>
+    <p>This page will be replaced by a sortable, filterable table.</p>
+    <p>You can then use the browser's "Save As..." function to save a copy of the page for local use or static hosting,
+      or refresh this page to make a different table.</p>
+    <input type="text" id="title" placeholder="Title"></input>
+    <button id="convert">Convert</button>
+    <label>
+      Filetype:
+      <select id="filetype">
+        <option>CSV</option>
+        <option>TSV</option>
+      </select>
+    </label>
+    <textarea id="data" rows="50" cols="60" placeholder="CSV or TSV data"></textarea>
+    <script>"strict mode"
+      document.getElementById('convert').addEventListener('click', () => {
+        const title = document.getElementById('title').value
+        if (title !== '') {
+          document.querySelector('title').innerText = title
+          const h1 = document.createElement('h1')
+          h1.innerText = title
+          document.body.append(h1)
+        }
+        const parse = document.getElementById('filetype').value === 'CSV' ? parseCSV : parseTSV
+        const lines = document.getElementById('data').value.trim().split('\n')
+        const table = document.createElement('table')
+        const thead = document.createElement('thead')
+        const tbody = document.createElement('tbody')
+        table.append(thead, tbody)
+        const headerRow = document.createElement('tr')
+        thead.append(headerRow)
+        const headers = parse(lines.shift())
+        for (const header of headers) {
+          const th = document.createElement('th')
+          th.innerText = header
+          th.setAttribute('scope', 'col')
+          headerRow.append(th)
+        }
+        for (const line of lines) {
+          const row = document.createElement('tr')
+          for (let data of parse(line)) {
+            const td = document.createElement('td')
+            td.innerText = data
+            row.append(td)
+          }
+          tbody.append(row)
+        }
+        const script = document.createElement('script')
+        script.innerHTML = `"strict mode"
+  document.querySelectorAll('th')
+    .forEach((th, i) => th.addEventListener('click', () => sortBy(th, i)))
+
+  function sortBy(th, i) {
+    const tbody = document.querySelector('tbody')
+    const rows = Array.from(tbody.rows)
+    const sortedOrder = th.getAttribute('aria-sort')
+    if (sortedOrder) {
+      th.setAttribute('aria-sort', sortedOrder === 'ascending' ? 'descending' : 'ascending')
+      rows.reverse()
+    } else {
+      document.querySelector('th[aria-sort]')?.removeAttribute('aria-sort')
+      th.setAttribute('aria-sort', 'ascending')
+      rows.sort((elA, elB) =>
+        elA.children[i].textContent.localeCompare(
+          elB.children[i].textContent,
+          navigator.languages,
+          { sensitivity: 'base' })
+      )
+    }
+    while (tbody.firstChild) {
+      tbody.removeChild(tbody.firstChild)
+    }
+    tbody.append(...rows)
+  }
+  document.getElementById('search').addEventListener('input', ({ target }) => {
+    if (target.value === '') {
+      for (const el of document.querySelectorAll('tbody tr[hidden]')) {
+        el.removeAttribute('hidden')
+      }
+    } else {
+      const re = new RegExp(RegExp.escape?.(target.value) ?? target.value, 'i')
+      for (const el of document.querySelectorAll('tbody tr')) {
+        if (re.test(el.textContent)) {
+          el.removeAttribute('hidden')
+        } else {
+          el.setAttribute('hidden', '')
+        }
+      }
+    }
+  })`
+        document.getElementById('search').removeAttribute('hidden')
+        document.body.removeChild(document.getElementById('inputs'))
+        document.body.append(table, script)
+      })
+      const parseTSV = (row) => row.split('\t')
+      const parseCSV = (row) =>
+        [...row.match(/"(\\.|[^"])*"|([^,"\n]+)/g)]
+          .map((cell) => cell.startsWith('"') ? cell.slice(1, -1) : cell)
+    </script>
+  </div>
+  <input id="search" type="search" placeholder="Search..." hidden />
+</body>
+
+</html>
