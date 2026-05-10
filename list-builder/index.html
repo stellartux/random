@@ -70,12 +70,14 @@
 
 <body>
   <div id="inputs">
-    <p>Paste a CSV or TSV in the text area, type a title in the title box then hit convert.</p>
-    <p>This page will be replaced by a sortable, filterable table.</p>
-    <p>You can then use the browser's "Save As..." function to save a copy of the page for local use or static hosting,
-      or refresh this page to make a different table.</p>
-    <input type="text" id="title" placeholder="Title"></input>
-    <button id="convert">Convert</button>
+    <div>
+      <p>Paste a CSV or TSV in the text area, type a title in the title box then hit convert.</p>
+      <p>This page will be replaced by a sortable, filterable table.</p>
+      <p>You can then use the browser's "Save As..." function to save a copy of the page for local use or static
+        hosting,
+        or refresh this page to make a different table.</p>
+      <input type="text" id="title" placeholder="Title"></input>
+      <button id="convert">Convert</button>
     <label>
       Filetype:
       <select id="filetype">
@@ -83,6 +85,7 @@
         <option>TSV</option>
       </select>
     </label>
+    </div>
     <textarea id="data" rows="50" cols="60" placeholder="CSV or TSV data"></textarea>
     <script>"strict mode"
       document.getElementById('convert').addEventListener('click', () => {
