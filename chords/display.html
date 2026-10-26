@@ -600,7 +600,7 @@
         return chordName.split('/').filter(Boolean).map(canonical).join('/')
       } else if (chordName) {
         return chordName[0].toUpperCase() + chordName.slice(1)
-          .replace(/#/g, '♯').replace(/b/g, '♭').replace('♮', '')
+          .replace('#', '♯').replace('b', '♭').replace(/[♮'~]/g, '')
       }
     }
 
@@ -638,7 +638,11 @@
         const chord = parseChord(chordName)
         if (chord && qualities[chord.quality]) {
           const root = noteToPitch(chord.root) + accidentalsToOffset(chord.accidentals)
-          return qualities[chord.quality].map((x) => x + root)
+          const notes = qualities[chord.quality].map((x) => x + root + chord.octave.length * 12)
+          for (const _ of chord.inversion) {
+            notes.push(notes.shift() + 12)
+          }
+          return notes
         }
       }
     }
@@ -654,13 +658,11 @@
     }
 
     function parseChord(/** @type {string} */ chord) {
-      const match = chord.match(/^(?<root>[a-gA-G])(?<accidentals>[#b♯♭♮]*)(?<quality>.*?)(?:\/(?<slashroot>[a-gA-G])(?<slashaccidentals>[#b♯♭♮]*))?$/u)
-      if (match?.groups) {
-        const result = match.groups
-        return result
-      }
+      const match = chord.match(/^(?<root>[a-gA-G])(?<accidentals>[#b♯♭♮]*)(?<quality>[^']*?)(?<octave>'*)(?<inversion>~*)(?:\/(?<slashroot>[a-gA-G])(?<slashaccidentals>[#b♯♭♮]*))?$/u)
+      return match?.groups ?? undefined
     }
 
+    //@ts-ignore
     function appendKeyboard(/** @type {string} */ chord, /** @type {HTMLElement} */ el, template = { 13: template13, 25: template25, 37: template37 }[keyCount.children[keyCount.selectedIndex].value]) {
       const palette = useColor.checked ?
         [
