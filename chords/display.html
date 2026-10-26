@@ -19,7 +19,7 @@
       gap: 1ch;
     }
 
-    input,
+    input#chord-input,
     button {
       font-size: x-large;
       margin-left: 4ch;
@@ -394,6 +394,9 @@
 
   <div>
     <input id="chord-input" type="text" size="32" value="" placeholder="Type some chords" />
+    <label for="color">Colour:
+      <input type="checkbox" id="color" checked>
+    </label>
     <label for="key-count">Keys:
       <select id="key-count">
         <option value="">auto</option>
@@ -530,6 +533,7 @@
     const getId = (/** @type {string} */ id) => document.getElementById(id)
 
     const /** @type {HTMLInputElement} */ input = getId('chord-input')
+    const /** @type {HTMLInputElement} */ useColor = getId('color')
     const /** @type {HTMLSelectElement} */ keyCount = getId('key-count')
     const /** @type {HTMLOutputElement} */ output = getId('chord-output')
     const /** @type {HTMLTemplateElement} */ template13 = getId('chord-display-13')
@@ -658,10 +662,12 @@
     }
 
     function appendKeyboard(/** @type {string} */ chord, /** @type {HTMLElement} */ el, template = { 13: template13, 25: template25, 37: template37 }[keyCount.children[keyCount.selectedIndex].value]) {
-      const palette = [
-        '#ff4040', '#11ee80', '#bf00bf', '#80ee11', '#4040ff', '#ee8011',
-        '#00bfbf', '#ee1180', '#40ff40', '#8011ee', '#bfbf00', '#1180ee'
-      ]
+      const palette = useColor.checked ?
+        [
+          '#ff4040', '#11ee80', '#bf00bf', '#80ee11', '#4040ff', '#ee8011',
+          '#00bfbf', '#ee1180', '#40ff40', '#8011ee', '#bfbf00', '#1180ee'
+        ]
+        : Array(12).fill('#f0a320')
       const pitches = chordToPitches(chord)
       if (pitches) {
         if (!template) {
@@ -704,6 +710,11 @@
       } else {
         url.searchParams.delete('k')
       }
+      if (useColor.checked) {
+        url.searchParams.delete('x')
+      } else {
+        url.searchParams.set('x', '1')
+      }
       window.history.replaceState({}, '', url)
     }
 
@@ -713,7 +724,9 @@
       input.value = params.get('c').replace(/_+/g, ' ')
     }
     keyCount.value = params.get('k') || ''
+    useColor.checked = !params.get('x')
     input.addEventListener('input', updateChordList)
+    useColor.addEventListener('input', updateChordList)
     keyCount.addEventListener('input', updateChordList)
     updateChordList()
     document.addEventListener('click', () => audioContext.resume(), { once: true, capture: true })
